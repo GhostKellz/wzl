@@ -42,7 +42,7 @@
         },
         .zquic = .{
             .url = "https://github.com/ghostkellz/zquic/archive/refs/heads/main.tar.gz",
-            .hash = "zquic-0.8.4-2rPds-J_nBOYqKUczwJyE-QvefJDrPoAdyCuo_-xpMnG",
+            .hash = "zquic-0.8.4-2rPds3B2nBMALCDhmajScyilFa0Q0IdbWBFLwqsDSAVG",
         },
     },
     .paths = .{

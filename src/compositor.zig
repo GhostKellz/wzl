@@ -15,7 +15,7 @@ pub const CompositorConfig = struct {
     enable_input: bool = true,
     enable_output: bool = true,
     max_clients: u32 = 32,
-    
+
     // Arch Linux specific configurations
     use_systemd_socket: bool = false,
     enable_drm: bool = true,
@@ -42,15 +42,15 @@ pub const SurfaceState = struct {
     transform: output.OutputTransform = .normal,
     buffer_id: ?protocol.ObjectId = null,
     damage_regions: std.ArrayList(DamageRect),
-    
+
     const Self = @This();
-    
+
     pub fn init(allocator: std.mem.Allocator) Self {
         return Self{
             .damage_regions = std.ArrayList(DamageRect).init(allocator),
         };
     }
-    
+
     pub fn deinit(self: *Self) void {
         self.damage_regions.deinit();
     }
@@ -69,9 +69,9 @@ pub const View = struct {
     parent: ?*View = null,
     children: std.ArrayList(*View),
     allocator: std.mem.Allocator,
-    
+
     const Self = @This();
-    
+
     pub fn init(allocator: std.mem.Allocator, surface_id: protocol.ObjectId) Self {
         return Self{
             .surface_id = surface_id,
@@ -80,18 +80,18 @@ pub const View = struct {
             .allocator = allocator,
         };
     }
-    
+
     pub fn deinit(self: *Self) void {
         self.state.deinit();
         // Don't deinit children as they're managed by the compositor
         self.children.deinit();
     }
-    
+
     pub fn addChild(self: *Self, child: *View) !void {
         child.parent = self;
         try self.children.append(child);
     }
-    
+
     pub fn removeChild(self: *Self, child: *View) void {
         for (self.children.items, 0..) |c, i| {
             if (c == child) {
@@ -101,7 +101,7 @@ pub const View = struct {
             }
         }
     }
-    
+
     pub fn map(self: *Self, x: i32, y: i32, width: i32, height: i32) void {
         self.state.mapped = true;
         self.state.visible = true;
@@ -110,22 +110,22 @@ pub const View = struct {
         self.state.width = width;
         self.state.height = height;
     }
-    
+
     pub fn unmap(self: *Self) void {
         self.state.mapped = false;
         self.state.visible = false;
     }
-    
+
     pub fn move(self: *Self, x: i32, y: i32) void {
         self.state.x = x;
         self.state.y = y;
     }
-    
+
     pub fn resize(self: *Self, width: i32, height: i32) void {
         self.state.width = width;
         self.state.height = height;
     }
-    
+
     pub fn addDamage(self: *Self, x: i32, y: i32, width: i32, height: i32) !void {
         try self.state.damage_regions.append(DamageRect{
             .x = x,
@@ -134,7 +134,7 @@ pub const View = struct {
             .height = height,
         });
     }
-    
+
     pub fn clearDamage(self: *Self) void {
         self.state.damage_regions.clearRetainingCapacity();
     }
@@ -144,9 +144,9 @@ pub const OutputManager = struct {
     outputs: std.ArrayList(OutputInfo),
     primary_output: ?*OutputInfo = null,
     allocator: std.mem.Allocator,
-    
+
     const Self = @This();
-    
+
     pub const OutputInfo = struct {
         id: u32,
         name: []const u8,
@@ -158,26 +158,26 @@ pub const OutputManager = struct {
         scale_factor: i32,
         transform: output.OutputTransform,
         connected: bool,
-        
+
         pub fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
             allocator.free(self.name);
         }
     };
-    
+
     pub fn init(allocator: std.mem.Allocator) Self {
         return Self{
             .outputs = std.ArrayList(OutputInfo).init(allocator),
             .allocator = allocator,
         };
     }
-    
+
     pub fn deinit(self: *Self) void {
         for (self.outputs.items) |*output_item| {
             output_item.deinit(self.allocator);
         }
         self.outputs.deinit();
     }
-    
+
     pub fn addOutput(self: *Self, name: []const u8, width: i32, height: i32, refresh_rate: i32) !*OutputInfo {
         const output_name = try self.allocator.dupe(u8, name);
         const output_info = OutputInfo{
@@ -192,17 +192,17 @@ pub const OutputManager = struct {
             .transform = .normal,
             .connected = true,
         };
-        
+
         try self.outputs.append(output_info);
         const output_ptr = &self.outputs.items[self.outputs.items.len - 1];
-        
+
         if (self.primary_output == null) {
             self.primary_output = output_ptr;
         }
-        
+
         return output_ptr;
     }
-    
+
     pub fn getOutput(self: *Self, id: u32) ?*OutputInfo {
         for (self.outputs.items) |*output_item| {
             if (output_item.id == id) {
@@ -211,7 +211,7 @@ pub const OutputManager = struct {
         }
         return null;
     }
-    
+
     pub fn layoutOutputs(self: *Self) void {
         var x_offset: i32 = 0;
         for (self.outputs.items) |*output_item| {
@@ -226,35 +226,35 @@ pub const InputManager = struct {
     seats: std.ArrayList(SeatInfo),
     default_seat: ?*SeatInfo = null,
     allocator: std.mem.Allocator,
-    
+
     const Self = @This();
-    
+
     pub const SeatInfo = struct {
         id: u32,
         name: []const u8,
         capabilities: input.SeatCapability,
         pointer_focused_surface: ?protocol.ObjectId = null,
         keyboard_focused_surface: ?protocol.ObjectId = null,
-        
+
         pub fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
             allocator.free(self.name);
         }
     };
-    
+
     pub fn init(allocator: std.mem.Allocator) Self {
         return Self{
             .seats = std.ArrayList(SeatInfo).init(allocator),
             .allocator = allocator,
         };
     }
-    
+
     pub fn deinit(self: *Self) void {
         for (self.seats.items) |*seat| {
             seat.deinit(self.allocator);
         }
         self.seats.deinit();
     }
-    
+
     pub fn addSeat(self: *Self, name: []const u8, capabilities: input.SeatCapability) !*SeatInfo {
         const seat_name = try self.allocator.dupe(u8, name);
         const seat = SeatInfo{
@@ -262,29 +262,29 @@ pub const InputManager = struct {
             .name = seat_name,
             .capabilities = capabilities,
         };
-        
+
         try self.seats.append(seat);
         const seat_ptr = &self.seats.items[self.seats.items.len - 1];
-        
+
         if (self.default_seat == null) {
             self.default_seat = seat_ptr;
         }
-        
+
         return seat_ptr;
     }
-    
+
     pub fn setPointerFocus(self: *Self, seat_id: u32, surface_id: ?protocol.ObjectId) void {
         if (self.getSeat(seat_id)) |seat| {
             seat.pointer_focused_surface = surface_id;
         }
     }
-    
+
     pub fn setKeyboardFocus(self: *Self, seat_id: u32, surface_id: ?protocol.ObjectId) void {
         if (self.getSeat(seat_id)) |seat| {
             seat.keyboard_focused_surface = surface_id;
         }
     }
-    
+
     pub fn getSeat(self: *Self, id: u32) ?*SeatInfo {
         for (self.seats.items) |*seat| {
             if (seat.id == id) {
@@ -299,25 +299,25 @@ pub const CompositorFramework = struct {
     server: server.Server,
     config: CompositorConfig,
     allocator: std.mem.Allocator,
-    
+
     // Scene graph
     views: std.HashMap(protocol.ObjectId, *View, std.hash_map.AutoContext(protocol.ObjectId), std.hash_map.default_max_load_percentage),
     root_views: std.ArrayList(*View),
-    
+
     // Managers
     output_manager: OutputManager,
     input_manager: InputManager,
-    
+
     // Runtime
     runtime: ?*zsync.Runtime = null,
     running: bool = false,
-    
+
     const Self = @This();
-    
+
     pub fn init(allocator: std.mem.Allocator, config: CompositorConfig) !Self {
         const server_config = .{};
         const compositor_server = try server.Server.init(allocator, server_config);
-        
+
         return Self{
             .server = compositor_server,
             .config = config,
@@ -328,7 +328,7 @@ pub const CompositorFramework = struct {
             .input_manager = InputManager.init(allocator),
         };
     }
-    
+
     pub fn deinit(self: *Self) void {
         // Clean up views
         var view_iterator = self.views.iterator();
@@ -338,20 +338,20 @@ pub const CompositorFramework = struct {
         }
         self.views.deinit();
         self.root_views.deinit();
-        
+
         // Clean up managers
         self.output_manager.deinit();
         self.input_manager.deinit();
-        
+
         // Clean up server
         self.server.deinit();
     }
-    
+
     pub fn setupDefaultConfiguration(self: *Self) !void {
         // Add default output (for Arch Linux compatibility)
         _ = try self.output_manager.addOutput("DP-1", 1920, 1080, 60000);
         self.output_manager.layoutOutputs();
-        
+
         // Add default seat with full capabilities
         const default_caps = input.SeatCapability{
             .pointer = true,
@@ -359,46 +359,46 @@ pub const CompositorFramework = struct {
             .touch = false,
         };
         _ = try self.input_manager.addSeat("default", default_caps);
-        
+
         std.debug.print("[wzl] Compositor configured for Arch Linux x64\n", .{});
         std.debug.print("[wzl] Default output: 1920x1080@60Hz\n", .{});
         std.debug.print("[wzl] Default seat: pointer + keyboard\n", .{});
     }
-    
+
     pub fn run(self: *Self) !void {
         try self.setupDefaultConfiguration();
-        
+
         self.running = true;
         std.debug.print("[wzl] Starting compositor on socket: {s}\n", .{self.config.socket_name});
-        
+
         // Main event loop would go here
         // For now, we'll simulate with a simple loop
         while (self.running) {
             // Process events, handle client connections, render frames
             std.time.sleep(16_666_666); // ~60 FPS
-            
+
             // This would be replaced with actual event processing
             // try self.processEvents();
             // try self.renderFrame();
         }
     }
-    
+
     pub fn stop(self: *Self) void {
         self.running = false;
         std.debug.print("[wzl] Compositor stopped\n", .{});
     }
-    
+
     pub fn createView(self: *Self, surface_id: protocol.ObjectId) !*View {
         const view = try self.allocator.create(View);
         view.* = View.init(self.allocator, surface_id);
-        
+
         try self.views.put(surface_id, view);
         try self.root_views.append(view);
-        
+
         std.debug.print("[wzl] Created view for surface {}\n", .{surface_id});
         return view;
     }
-    
+
     pub fn destroyView(self: *Self, surface_id: protocol.ObjectId) void {
         if (self.views.get(surface_id)) |view| {
             // Remove from root views
@@ -408,42 +408,42 @@ pub const CompositorFramework = struct {
                     break;
                 }
             }
-            
+
             // Clean up the view
             _ = self.views.remove(surface_id);
             view.deinit();
             self.allocator.destroy(view);
-            
+
             std.debug.print("[wzl] Destroyed view for surface {}\n", .{surface_id});
         }
     }
-    
+
     pub fn getView(self: *Self, surface_id: protocol.ObjectId) ?*View {
         return self.views.get(surface_id);
     }
-    
+
     pub fn mapView(self: *Self, surface_id: protocol.ObjectId, x: i32, y: i32, width: i32, height: i32) void {
         if (self.getView(surface_id)) |view| {
             view.map(x, y, width, height);
             std.debug.print("[wzl] Mapped view {} at {}x{} ({}x{})\n", .{ surface_id, x, y, width, height });
         }
     }
-    
+
     pub fn unmapView(self: *Self, surface_id: protocol.ObjectId) void {
         if (self.getView(surface_id)) |view| {
             view.unmap();
             std.debug.print("[wzl] Unmapped view {}\n", .{surface_id});
         }
     }
-    
+
     // Arch Linux specific methods
     pub fn detectArchLinuxFeatures(self: *Self) !void {
         _ = self;
-        
+
         // Check for common Arch Linux graphics drivers
         const drm_devices = [_][]const u8{ "/dev/dri/card0", "/dev/dri/card1" };
         var drm_available = false;
-        
+
         for (drm_devices) |device| {
             if (std.fs.openFileAbsolute(device, .{})) |file| {
                 file.close();
@@ -452,11 +452,11 @@ pub const CompositorFramework = struct {
                 break;
             } else |_| {}
         }
-        
+
         if (!drm_available) {
             std.debug.print("[wzl] Warning: No DRM devices found, running in software mode\n", .{});
         }
-        
+
         // Check for libinput
         const libinput_devices = [_][]const u8{ "/dev/input/event0", "/dev/input/mice" };
         for (libinput_devices) |device| {
@@ -466,38 +466,197 @@ pub const CompositorFramework = struct {
                 break;
             } else |_| {}
         }
-        
+
         // Check environment variables common on Arch
         if (std.posix.getenv("XDG_CURRENT_DESKTOP")) |desktop| {
             std.debug.print("[wzl] Desktop environment: {s}\n", .{desktop});
         }
-        
+
         if (std.posix.getenv("WAYLAND_DISPLAY")) |display| {
             std.debug.print("[wzl] Existing Wayland display: {s}\n", .{display});
         }
     }
-    
+
     pub fn optimizeForArch(self: *Self) !void {
         // Arch-specific optimizations
         try self.detectArchLinuxFeatures();
-        
+
         // Set up optimal buffer formats for common Arch graphics drivers
         const optimal_formats = [_]buffer.ShmFormat{
             .xrgb8888, // Most common
             .argb8888, // With alpha
-            .rgb565,   // Lower memory
+            .rgb565, // Lower memory
         };
-        
+
         std.debug.print("[wzl] Configured optimal formats for Arch Linux graphics drivers\n", .{});
         _ = optimal_formats;
-        
+
         // Enable hardware acceleration hints
         if (self.config.enable_drm) {
             std.debug.print("[wzl] DRM acceleration enabled\n", .{});
         }
-        
+
         if (self.config.enable_libinput) {
             std.debug.print("[wzl] libinput integration enabled\n", .{});
+        }
+    }
+};
+
+// High-level scene management
+pub const Scene = struct {
+    views: std.ArrayList(*View),
+    allocator: std.mem.Allocator,
+    output: output.OutputInfo,
+
+    const Self = @This();
+
+    pub fn init(allocator: std.mem.Allocator, output_info: output.OutputInfo) Self {
+        return Self{
+            .views = std.ArrayList(*View).init(allocator),
+            .allocator = allocator,
+            .output = output_info,
+        };
+    }
+
+    pub fn deinit(self: *Self) void {
+        self.views.deinit();
+    }
+
+    pub fn addView(self: *Self, view: *View) !void {
+        try self.views.append(view);
+    }
+
+    pub fn removeView(self: *Self, view: *View) void {
+        for (self.views.items, 0..) |v, i| {
+            if (v == view) {
+                _ = self.views.swapRemove(i);
+                break;
+            }
+        }
+    }
+
+    pub fn findViewAt(self: *Self, x: i32, y: i32) ?*View {
+        // Find topmost view at position (reverse order for stacking)
+        var i = self.views.items.len;
+        while (i > 0) {
+            i -= 1;
+            const view = self.views.items[i];
+            if (x >= view.state.x and x < view.state.x + view.state.width and
+                y >= view.state.y and y < view.state.y + view.state.height)
+            {
+                return view;
+            }
+        }
+        return null;
+    }
+};
+
+// Input routing system
+pub const InputRouter = struct {
+    scene: *Scene,
+    focused_view: ?*View = null,
+    pointer_grab: ?*View = null,
+    keyboard_grab: ?*View = null,
+
+    const Self = @This();
+
+    pub fn init(scene: *Scene) Self {
+        return Self{
+            .scene = scene,
+        };
+    }
+
+    pub fn handlePointerMotion(self: *Self, x: f64, y: f64) void {
+        const ix = @as(i32, @intFromFloat(x));
+        const iy = @as(i32, @intFromFloat(y));
+
+        if (self.pointer_grab) |grab| {
+            // Send to grabbed view
+            _ = grab;
+        } else {
+            // Find view under cursor
+            if (self.scene.findViewAt(ix, iy)) |_| {
+                // Send enter/leave events
+                // TODO: Implement enter/leave logic
+            }
+        }
+    }
+
+    pub fn handlePointerButton(self: *Self, button: u32, state: enum { pressed, released }, x: f64, y: f64) void {
+        const ix = @as(i32, @intFromFloat(x));
+        const iy = @as(i32, @intFromFloat(y));
+
+        if (self.pointer_grab) |grab| {
+            // Send to grabbed view
+            _ = grab;
+        } else {
+            if (self.scene.findViewAt(ix, iy)) |view| {
+                // Focus the view
+                self.focused_view = view;
+                // Send button event
+                // TODO: Implement button event sending
+            }
+        }
+        _ = button;
+        _ = state;
+    }
+
+    pub fn handleKeyboard(self: *Self, keycode: u32, state: enum { pressed, released }) void {
+        if (self.keyboard_grab) |grab| {
+            // Send to grabbed view
+            _ = grab;
+        } else if (self.focused_view) |view| {
+            // Send to focused view
+            _ = view;
+        }
+        _ = keycode;
+        _ = state;
+    }
+};
+
+// Output rendering system
+pub const Renderer = struct {
+    scene: *Scene,
+    backend: RenderingBackend,
+
+    const RenderingBackend = enum {
+        software,
+        egl,
+        vulkan,
+    };
+
+    const Self = @This();
+
+    pub fn init(scene: *Scene, backend: RenderingBackend) Self {
+        return Self{
+            .scene = scene,
+            .backend = backend,
+        };
+    }
+
+    pub fn renderFrame(self: *Self) !void {
+        // Clear background
+        // Render all views in scene
+        for (self.scene.views.items) |view| {
+            try self.renderView(view);
+        }
+        // Present frame
+    }
+
+    fn renderView(self: *Self, view: *View) !void {
+        // Render individual view
+        // Apply transformations, damage tracking, etc.
+        _ = view;
+        switch (self.backend) {
+            .software => {
+                // Software rendering
+            },
+            .egl => {
+                // EGL rendering
+            },
+            .vulkan => {
+                // Vulkan rendering
+            },
         }
     }
 };

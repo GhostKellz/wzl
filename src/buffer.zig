@@ -93,9 +93,9 @@ pub const ShmPool = struct {
     client: *@import("client.zig").Client,
     fd: std.fs.File.Handle,
     size: i32,
-    
+
     const Self = @This();
-    
+
     pub fn init(client: *@import("client.zig").Client, object_id: protocol.ObjectId, fd: std.fs.File.Handle, size: i32) Self {
         return Self{
             .object_id = object_id,
@@ -104,7 +104,7 @@ pub const ShmPool = struct {
             .size = size,
         };
     }
-    
+
     pub fn createBuffer(self: *Self, offset: i32, width: i32, height: i32, stride: i32, format: ShmFormat) !protocol.ObjectId {
         const buffer_id = self.client.nextId();
         const message = try protocol.Message.init(
@@ -123,7 +123,7 @@ pub const ShmPool = struct {
         try self.client.connection.sendMessage(message);
         return buffer_id;
     }
-    
+
     pub fn destroy(self: *Self) !void {
         const message = try protocol.Message.init(
             self.client.allocator,
@@ -133,7 +133,7 @@ pub const ShmPool = struct {
         );
         try self.client.connection.sendMessage(message);
     }
-    
+
     pub fn resize(self: *Self, new_size: i32) !void {
         const message = try protocol.Message.init(
             self.client.allocator,
@@ -153,9 +153,9 @@ pub const Shm = struct {
     object_id: protocol.ObjectId,
     client: *@import("client.zig").Client,
     supported_formats: std.ArrayList(ShmFormat),
-    
+
     const Self = @This();
-    
+
     pub fn init(client: *@import("client.zig").Client, object_id: protocol.ObjectId) Self {
         return Self{
             .object_id = object_id,
@@ -163,11 +163,11 @@ pub const Shm = struct {
             .supported_formats = std.ArrayList(ShmFormat).init(client.allocator),
         };
     }
-    
+
     pub fn deinit(self: *Self) void {
         self.supported_formats.deinit();
     }
-    
+
     pub fn createPool(self: *Self, fd: std.fs.File.Handle, size: i32) !protocol.ObjectId {
         const pool_id = self.client.nextId();
         const message = try protocol.Message.init(
@@ -183,7 +183,7 @@ pub const Shm = struct {
         try self.client.connection.sendMessage(message);
         return pool_id;
     }
-    
+
     pub fn handleEvent(self: *Self, message: protocol.Message) !void {
         switch (message.header.opcode) {
             0 => { // format
@@ -198,7 +198,7 @@ pub const Shm = struct {
             else => {},
         }
     }
-    
+
     pub fn isFormatSupported(self: *Self, format: ShmFormat) bool {
         for (self.supported_formats.items) |supported| {
             if (supported == format) return true;
@@ -216,9 +216,9 @@ pub const Buffer = struct {
     stride: i32,
     format: ShmFormat,
     released: bool,
-    
+
     const Self = @This();
-    
+
     pub fn init(client: *@import("client.zig").Client, object_id: protocol.ObjectId, width: i32, height: i32, stride: i32, format: ShmFormat) Self {
         return Self{
             .object_id = object_id,
@@ -230,7 +230,7 @@ pub const Buffer = struct {
             .released = false,
         };
     }
-    
+
     pub fn destroy(self: *Self) !void {
         const message = try protocol.Message.init(
             self.client.allocator,
@@ -240,7 +240,7 @@ pub const Buffer = struct {
         );
         try self.client.connection.sendMessage(message);
     }
-    
+
     pub fn handleEvent(self: *Self, message: protocol.Message) !void {
         switch (message.header.opcode) {
             0 => { // release
@@ -249,7 +249,7 @@ pub const Buffer = struct {
             else => {},
         }
     }
-    
+
     pub fn isReleased(self: *Self) bool {
         return self.released;
     }
@@ -265,21 +265,19 @@ pub fn createMemoryMappedBuffer(allocator: std.mem.Allocator, width: i32, height
     _ = allocator;
     const bytes_per_pixel: i32 = switch (format) {
         .argb8888, .xrgb8888, .rgba8888, .bgra8888 => 4,
-        .rgb565, .bgr565, .xrgb4444, .xbgr4444, .rgbx4444, .bgrx4444,
-        .argb4444, .abgr4444, .rgba4444, .bgra4444, .xrgb1555, .xbgr1555,
-        .rgbx5551, .bgrx5551, .argb1555, .abgr1555, .rgba5551, .bgra5551 => 2,
+        .rgb565, .bgr565, .xrgb4444, .xbgr4444, .rgbx4444, .bgrx4444, .argb4444, .abgr4444, .rgba4444, .bgra4444, .xrgb1555, .xbgr1555, .rgbx5551, .bgrx5551, .argb1555, .abgr1555, .rgba5551, .bgra5551 => 2,
         .rgb888, .bgr888 => 3,
         .c8, .r8, .r8_snorm => 1,
         else => return error.UnsupportedFormat,
     };
-    
+
     const stride = width * bytes_per_pixel;
     const size = stride * height;
-    
+
     // Create anonymous memory mapping
     const fd = try std.posix.memfd_create("wayland-shm", 0);
     try std.posix.ftruncate(fd, size);
-    
+
     const data = try std.posix.mmap(
         null,
         @intCast(size),
@@ -288,7 +286,7 @@ pub fn createMemoryMappedBuffer(allocator: std.mem.Allocator, width: i32, height
         fd,
         0,
     );
-    
+
     return .{
         .fd = fd,
         .data = data,
@@ -301,3 +299,110 @@ pub fn destroyMemoryMappedBuffer(data: []u8, fd: std.fs.File.Handle) void {
     std.posix.munmap(data);
     std.posix.close(fd);
 }
+
+// DMA-BUF buffer support for GPU-accelerated compositing
+pub const DmabufFormat = enum(u32) {
+    // Reuse SHM formats for compatibility
+    argb8888 = 0,
+    xrgb8888 = 1,
+    // Add dmabuf-specific formats if needed
+};
+
+pub const DmabufPlane = struct {
+    fd: std.fs.File.Handle,
+    offset: u32,
+    stride: u32,
+};
+
+pub const DmabufBuffer = struct {
+    width: u32,
+    height: u32,
+    format: DmabufFormat,
+    planes: []DmabufPlane,
+    modifier: u64, // DRM format modifier
+    allocator: std.mem.Allocator,
+
+    const Self = @This();
+
+    pub fn init(allocator: std.mem.Allocator, width: u32, height: u32, format: DmabufFormat, modifier: u64) !Self {
+        // In real implementation, planes would be created from actual dmabuf
+        const planes = try allocator.alloc(DmabufPlane, 1); // Single plane for simplicity
+        planes[0] = DmabufPlane{
+            .fd = 0, // Placeholder
+            .offset = 0,
+            .stride = width * 4, // Assume 4 bytes per pixel
+        };
+
+        return Self{
+            .width = width,
+            .height = height,
+            .format = format,
+            .planes = planes,
+            .modifier = modifier,
+            .allocator = allocator,
+        };
+    }
+
+    pub fn deinit(self: *Self) void {
+        self.allocator.free(self.planes);
+        // Close file descriptors in real implementation
+    }
+
+    pub fn getPlaneData(self: *Self, plane_index: usize) ![]u8 {
+        if (plane_index >= self.planes.len) return error.InvalidPlane;
+        const plane = &self.planes[plane_index];
+
+        // Map the dmabuf for CPU access
+        // This is a placeholder - real implementation would use mmap
+        _ = plane;
+        return &[_]u8{}; // Return empty slice as placeholder
+    }
+};
+
+// Linux dmabuf interface definitions
+pub const linux_dmabuf_interface = protocol.Interface{
+    .name = "zwp_linux_dmabuf_v1",
+    .version = 4,
+    .method_count = 3,
+    .methods = &[_]protocol.MethodSignature{
+        .{ .name = "destroy", .signature = "", .types = &[_]?*const protocol.Interface{} },
+        .{ .name = "create_params", .signature = "n", .types = &[_]?*const protocol.Interface{&linux_dmabuf_params_interface} },
+        .{ .name = "get_default_feedback", .signature = "n", .types = &[_]?*const protocol.Interface{&linux_dmabuf_feedback_interface} },
+    },
+    .event_count = 1,
+    .events = &[_]protocol.MethodSignature{
+        .{ .name = "format", .signature = "u", .types = &[_]?*const protocol.Interface{null} },
+    },
+};
+
+pub const linux_dmabuf_params_interface = protocol.Interface{
+    .name = "zwp_linux_dmabuf_params_v1",
+    .version = 4,
+    .method_count = 6,
+    .methods = &[_]protocol.MethodSignature{
+        .{ .name = "destroy", .signature = "", .types = &[_]?*const protocol.Interface{} },
+        .{ .name = "add", .signature = "huuuuu", .types = &[_]?*const protocol.Interface{ null, null, null, null, null, null } },
+        .{ .name = "create", .signature = "iiuu", .types = &[_]?*const protocol.Interface{ null, null, null, null } },
+        .{ .name = "create_immed", .signature = "niuuv", .types = &[_]?*const protocol.Interface{ null, null, null, null, null, null } },
+    },
+    .event_count = 1,
+    .events = &[_]protocol.MethodSignature{
+        .{ .name = "created", .signature = "n", .types = &[_]?*const protocol.Interface{&protocol.wl_buffer_interface} },
+    },
+};
+
+pub const linux_dmabuf_feedback_interface = protocol.Interface{
+    .name = "zwp_linux_dmabuf_feedback_v1",
+    .version = 4,
+    .method_count = 1,
+    .methods = &[_]protocol.MethodSignature{
+        .{ .name = "destroy", .signature = "", .types = &[_]?*const protocol.Interface{} },
+    },
+    .event_count = 4,
+    .events = &[_]protocol.MethodSignature{
+        .{ .name = "done", .signature = "", .types = &[_]?*const protocol.Interface{} },
+        .{ .name = "format_table", .signature = "hu", .types = &[_]?*const protocol.Interface{ null, null } },
+        .{ .name = "main_device", .signature = "a", .types = &[_]?*const protocol.Interface{null} },
+        .{ .name = "tranche_done", .signature = "", .types = &[_]?*const protocol.Interface{} },
+    },
+};
