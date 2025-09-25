@@ -34,15 +34,11 @@
     .dependencies = .{
         .zsync = .{
             .url = "https://github.com/ghostkellz/zsync/archive/refs/heads/main.tar.gz",
-            .hash = "zsync-0.5.4-KAuheV0SHQBxubuzXagj1oq5B2KE4VhMWTAAAaInwB2_",
-        },
-        .zcrypto = .{
-            .url = "https://github.com/ghostkellz/zcrypto/archive/refs/heads/main.tar.gz",
-            .hash = "zcrypto-0.8.6-rgQAI9g9DQDTxLJBz5QS6eF5rDIYloue7jV5YZysZCYl",
+            .hash = "zsync-0.5.4-KAuheZ4THQAlN32uBKm76ezT7dPT6rvj4ll56NiA9z9M",
         },
         .zquic = .{
             .url = "https://github.com/ghostkellz/zquic/archive/refs/heads/main.tar.gz",
-            .hash = "zquic-0.8.4-2rPds3B2nBMALCDhmajScyilFa0Q0IdbWBFLwqsDSAVG",
+            .hash = "zquic-0.9.0-2rPdsyexmxOTG6tHoQMyP9wrGNTx9H1SueA9zTfYKCY4",
         },
     },
     .paths = .{

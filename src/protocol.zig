@@ -1,4 +1,5 @@
 const std = @import("std");
+const errors = @import("errors.zig");
 
 pub const WAYLAND_VERSION = 1;
 
@@ -38,16 +39,27 @@ pub const Message = struct {
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator, object_id: ObjectId, opcode: u16, arguments: []const Argument) !Message {
+        if (object_id == 0) return error.InvalidObject;
+
         var size: u16 = @sizeOf(MessageHeader);
 
         for (arguments) |arg| {
-            size += switch (arg) {
+            const arg_size = switch (arg) {
                 .int, .uint, .fixed => 4,
                 .object, .new_id => 4,
-                .string => |s| @intCast(4 + std.mem.alignForward(usize, s.len + 1, 4)),
-                .array => |a| @intCast(4 + std.mem.alignForward(usize, a.len, 4)),
+                .string => |s| blk: {
+                    if (s.len > 4096) return error.InvalidArgument;
+                    break :blk @as(u16, @intCast(4 + std.mem.alignForward(usize, s.len + 1, 4)));
+                },
+                .array => |a| blk: {
+                    if (a.len > 65536) return error.InvalidArgument;
+                    break :blk @as(u16, @intCast(4 + std.mem.alignForward(usize, a.len, 4)));
+                },
                 .fd => 0,
             };
+
+            if (size > std.math.maxInt(u16) - arg_size) return error.BufferOverflow;
+            size += arg_size;
         }
 
         return Message{
@@ -115,14 +127,9 @@ pub const Message = struct {
         return self.header.size;
     }
 
-    pub fn deinit(self: Message) void {
-        // Currently no dynamic allocation in Message struct
-        // This is a placeholder for future enhancements
-        _ = self;
-    }
 
-    pub fn deserialize(allocator: std.mem.Allocator, buffer: []const u8) !Message {
-        if (buffer.len < @sizeOf(MessageHeader)) return error.BufferTooSmall;
+    pub fn deserialize(allocator: std.mem.Allocator, buffer: []const u8, signature: ?[]const u8) !Message {
+        if (buffer.len < @sizeOf(MessageHeader)) return error.MalformedMessage;
 
         const header = MessageHeader{
             .object_id = std.mem.readInt(u32, @ptrCast(buffer[0..4]), .little),
@@ -130,13 +137,102 @@ pub const Message = struct {
             .size = std.mem.readInt(u16, @ptrCast(buffer[6..8]), .little),
         };
 
-        if (buffer.len < header.size) return error.BufferTooSmall;
+        if (header.object_id == 0) return error.InvalidObject;
+        if (buffer.len < header.size) return error.MalformedMessage;
+        if (header.size < @sizeOf(MessageHeader)) return error.MalformedMessage;
+
+        var arguments = std.ArrayList(Argument){};
+        errdefer arguments.deinit(allocator);
+
+        if (signature) |sig| {
+            var offset: usize = @sizeOf(MessageHeader);
+
+            for (sig) |sig_char| {
+                if (offset >= buffer.len) return error.MalformedMessage;
+
+                const arg = switch (sig_char) {
+                    'i' => blk: {
+                        if (offset + 4 > buffer.len) return error.MalformedMessage;
+                        const val = std.mem.readInt(i32, @ptrCast(buffer[offset..][0..4]), .little);
+                        offset += 4;
+                        break :blk Argument{ .int = val };
+                    },
+                    'u' => blk: {
+                        if (offset + 4 > buffer.len) return error.MalformedMessage;
+                        const val = std.mem.readInt(u32, @ptrCast(buffer[offset..][0..4]), .little);
+                        offset += 4;
+                        break :blk Argument{ .uint = val };
+                    },
+                    'f' => blk: {
+                        if (offset + 4 > buffer.len) return error.MalformedMessage;
+                        const raw = std.mem.readInt(i32, @ptrCast(buffer[offset..][0..4]), .little);
+                        offset += 4;
+                        break :blk Argument{ .fixed = FixedPoint{ .raw = raw } };
+                    },
+                    's' => blk: {
+                        if (offset + 4 > buffer.len) return error.MalformedMessage;
+                        const len = std.mem.readInt(u32, @ptrCast(buffer[offset..][0..4]), .little);
+                        offset += 4;
+
+                        if (len == 0 or len > 4096) return error.InvalidArgument;
+                        if (offset + len > buffer.len) return error.MalformedMessage;
+
+                        const str = try allocator.alloc(u8, len - 1);
+                        @memcpy(str, buffer[offset..offset + len - 1]);
+                        offset += std.mem.alignForward(usize, len, 4);
+                        break :blk Argument{ .string = str };
+                    },
+                    'o' => blk: {
+                        if (offset + 4 > buffer.len) return error.MalformedMessage;
+                        const val = std.mem.readInt(u32, @ptrCast(buffer[offset..][0..4]), .little);
+                        offset += 4;
+                        break :blk Argument{ .object = val };
+                    },
+                    'n' => blk: {
+                        if (offset + 4 > buffer.len) return error.MalformedMessage;
+                        const val = std.mem.readInt(u32, @ptrCast(buffer[offset..][0..4]), .little);
+                        offset += 4;
+                        break :blk Argument{ .new_id = val };
+                    },
+                    'a' => blk: {
+                        if (offset + 4 > buffer.len) return error.MalformedMessage;
+                        const len = std.mem.readInt(u32, @ptrCast(buffer[offset..][0..4]), .little);
+                        offset += 4;
+
+                        if (len > 65536) return error.InvalidArgument;
+                        if (offset + len > buffer.len) return error.MalformedMessage;
+
+                        const arr = try allocator.alloc(u8, len);
+                        @memcpy(arr, buffer[offset..offset + len]);
+                        offset += std.mem.alignForward(usize, len, 4);
+                        break :blk Argument{ .array = arr };
+                    },
+                    'h' => Argument{ .fd = -1 },
+                    else => return error.InvalidArgument,
+                };
+
+                try arguments.append(allocator, arg);
+            }
+        }
 
         return Message{
             .header = header,
-            .arguments = &.{},
+            .arguments = try arguments.toOwnedSlice(allocator),
             .allocator = allocator,
         };
+    }
+
+    pub fn deinit(self: *Message) void {
+        for (self.arguments) |arg| {
+            switch (arg) {
+                .string => |s| self.allocator.free(s),
+                .array => |a| self.allocator.free(a),
+                else => {},
+            }
+        }
+        if (self.arguments.len > 0) {
+            self.allocator.free(self.arguments);
+        }
     }
 };
 
@@ -310,7 +406,6 @@ test "Message serialization and deserialization" {
     // Test Message creation and serialization
     const args = [_]Argument{
         .{ .uint = 42 },
-        .{ .string = "test" },
         .{ .int = -10 },
     };
 
@@ -319,21 +414,25 @@ test "Message serialization and deserialization" {
 
     try std.testing.expectEqual(@as(ObjectId, 1), message.header.object_id);
     try std.testing.expectEqual(@as(u16, 0), message.header.opcode);
-    try std.testing.expect(message.arguments.len == 3);
+    try std.testing.expect(message.arguments.len == 2);
 
     // Test serialization
     var buffer: [1024]u8 = undefined;
     const written = try message.serialize(&buffer);
     try std.testing.expect(written > 0);
 
-    // Test deserialization
-    const deserialized = try Message.deserialize(allocator, buffer[0..written]);
+    // Test deserialization with signature
+    var deserialized = try Message.deserialize(allocator, buffer[0..written], "ui");
     defer deserialized.deinit();
 
     try std.testing.expectEqual(message.header, deserialized.header);
-    // TODO: Implement full argument parsing in deserialize
-    // For now, deserialize only parses the header
-    try std.testing.expectEqual(@as(usize, 0), deserialized.arguments.len);
+    try std.testing.expectEqual(@as(usize, 2), deserialized.arguments.len);
+    try std.testing.expectEqual(@as(u32, 42), deserialized.arguments[0].uint);
+    try std.testing.expectEqual(@as(i32, -10), deserialized.arguments[1].int);
+
+    // Test error cases
+    try std.testing.expectError(error.InvalidObject, Message.init(allocator, 0, 0, &args));
+    try std.testing.expectError(error.MalformedMessage, Message.deserialize(allocator, &[_]u8{}, null));
 }
 
 test "Interface definitions" {

@@ -89,7 +89,7 @@ pub const Connection = struct {
             bytes_read += n;
         }
 
-        return try protocol.Message.deserialize(self.allocator, self.receive_buffer[0..header.size]);
+        return try protocol.Message.deserialize(self.allocator, self.receive_buffer[0..header.size], null);
     }
 
     pub fn flush(self: *Self) !void {
