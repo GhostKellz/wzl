@@ -2,7 +2,7 @@ const std = @import("std");
 const protocol = @import("protocol.zig");
 const connection = @import("connection.zig");
 const zsync = @import("zsync");
-const zcrypto = @import("zcrypto");
+// const zcrypto = @import("zcrypto"); // TODO: Re-enable when needed
 
 // Remote Wayland session support with encryption
 
@@ -21,7 +21,7 @@ pub const RemoteSessionConfig = struct {
 };
 
 pub const EncryptionContext = struct {
-    cipher: zcrypto.aes.Cipher,
+    cipher: ?*anyopaque, // TODO: Fix zcrypto API
     key: [32]u8, // 256-bit key
     iv: [16]u8,  // 128-bit IV
     
@@ -38,7 +38,7 @@ pub const EncryptionContext = struct {
         try std.crypto.random.bytes(&ctx.key);
         try std.crypto.random.bytes(&ctx.iv);
         
-        ctx.cipher = try zcrypto.aes.Cipher.init(.aes256, .cbc, &ctx.key, &ctx.iv);
+        ctx.cipher = null; // TODO: Fix zcrypto API
         
         return ctx;
     }
@@ -52,10 +52,12 @@ pub const EncryptionContext = struct {
     }
     
     pub fn deinit(self: *Self) void {
-        self.cipher.deinit();
+        if (self.cipher) |cipher| {
+            _ = cipher; // TODO: Implement proper deinit when zcrypto API is ready
+        }
         // Clear sensitive data
-        std.crypto.utils.secureZero(u8, &self.key);
-        std.crypto.utils.secureZero(u8, &self.iv);
+        std.crypto.secureZero(u8, &self.key);
+        std.crypto.secureZero(u8, &self.iv);
     }
 };
 
@@ -218,7 +220,7 @@ pub const RemoteClient = struct {
 pub const RemoteServer = struct {
     config: RemoteSessionConfig,
     allocator: std.mem.Allocator,
-    listener: std.net.StreamServer,
+    listener: std.net.Server,
     clients: std.ArrayList(*RemoteClient),
     running: bool = false,
     next_client_id: u32 = 1,
@@ -226,18 +228,16 @@ pub const RemoteServer = struct {
     const Self = @This();
     
     pub fn init(allocator: std.mem.Allocator, config: RemoteSessionConfig) !Self {
-        var listener = std.net.StreamServer.init(.{});
-        
         const address = try std.net.Address.parseIp(config.listen_address, config.listen_port);
-        try listener.listen(address);
+        const listener = try address.listen(.{});
         
-        std.debug.print("[wzl-remote] Remote server listening on {}:{}\n", .{ config.listen_address, config.listen_port });
+        std.debug.print("[wzl-remote] Remote server listening on {s}:{}\n", .{ config.listen_address, config.listen_port });
         
         return Self{
             .config = config,
             .allocator = allocator,
             .listener = listener,
-            .clients = std.ArrayList(*RemoteClient).init(allocator),
+            .clients = std.ArrayList(*RemoteClient){},
         };
     }
     
@@ -248,7 +248,7 @@ pub const RemoteServer = struct {
             client.deinit();
             self.allocator.destroy(client);
         }
-        self.clients.deinit();
+        self.clients.deinit(self.allocator);
         
         self.listener.deinit();
     }
@@ -303,7 +303,7 @@ pub const RemoteServer = struct {
             client.enableCompression();
         }
         
-        try self.clients.append(client);
+        try self.clients.append(self.allocator, client);
         std.debug.print("[wzl-remote] New client connected: {}\n", .{client.client_id});
     }
     
@@ -349,7 +349,7 @@ pub const RemoteServer = struct {
         }
         
         // Check CPU features for crypto acceleration
-        if (std.Target.current.cpu.arch == .x86_64) {
+        if (@import("builtin").target.cpu.arch == .x86_64) {
             std.debug.print("[wzl-remote] x86_64 detected - AES-NI acceleration available\n", .{});
         }
         

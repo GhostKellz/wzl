@@ -3,11 +3,17 @@
 const std = @import("std");
 
 pub const QuicServer = struct {
-    pub fn init() QuicServer {
+    pub fn init(allocator: std.mem.Allocator, config: anytype) !QuicServer {
+        _ = allocator;
+        _ = config;
         return .{};
     }
 
     pub fn deinit(self: *QuicServer) void {
+        _ = self;
+    }
+
+    pub fn optimizeForArch(self: *QuicServer) !void {
         _ = self;
     }
 };

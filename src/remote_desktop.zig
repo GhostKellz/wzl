@@ -121,7 +121,7 @@ pub const ScreenCaptureContext = struct {
             .height = height,
             .format = .argb8888,
             .framebuffer = framebuffer,
-            .damage_regions = std.ArrayList(DamageRegion).init(allocator),
+            .damage_regions = std.ArrayList(DamageRegion){},
             .last_capture_time = 0,
             .frame_counter = 0,
             .allocator = allocator,
@@ -130,7 +130,7 @@ pub const ScreenCaptureContext = struct {
     
     pub fn deinit(self: *Self) void {
         self.allocator.free(self.framebuffer);
-        self.damage_regions.deinit();
+        self.damage_regions.deinit(self.allocator);
         
         // Clean up hardware contexts
         if (self.vaapi_context) |ctx| {
@@ -184,7 +184,7 @@ pub const ScreenCaptureContext = struct {
     }
     
     pub fn addDamage(self: *Self, x: u32, y: u32, width: u32, height: u32) !void {
-        try self.damage_regions.append(DamageRegion{
+        try self.damage_regions.append(self.allocator, DamageRegion{
             .x = x,
             .y = y,
             .width = width,
@@ -351,7 +351,7 @@ pub const RemoteDesktopServer = struct {
     allocator: std.mem.Allocator,
     
     // Network
-    tcp_listener: std.net.StreamServer,
+    tcp_listener: std.net.Server,
     quic_server: ?quic_streaming.QuicServer = null,
     
     // Peers
@@ -368,9 +368,8 @@ pub const RemoteDesktopServer = struct {
     
     pub fn init(allocator: std.mem.Allocator, config: RemoteDesktopConfig) !Self {
         // Initialize TCP listener
-        var tcp_listener = std.net.StreamServer.init(.{});
         const address = try std.net.Address.parseIp("0.0.0.0", config.listen_port);
-        try tcp_listener.listen(address);
+        const tcp_listener = try address.listen(.{});
         
         // Initialize QUIC server for low-latency streaming
         const quic_config = quic_streaming.StreamingConfig{
@@ -398,7 +397,7 @@ pub const RemoteDesktopServer = struct {
             .allocator = allocator,
             .tcp_listener = tcp_listener,
             .quic_server = quic_server,
-            .peers = std.ArrayList(*RemotePeer).init(allocator),
+            .peers = std.ArrayList(*RemotePeer){},
             .capture_context = capture_context,
             .password_hash = password_hash,
         };
@@ -411,7 +410,7 @@ pub const RemoteDesktopServer = struct {
             peer.deinit();
             self.allocator.destroy(peer);
         }
-        self.peers.deinit();
+        self.peers.deinit(self.allocator);
         
         if (self.quic_server) |*quic| {
             quic.deinit();
@@ -472,7 +471,7 @@ pub const RemoteDesktopServer = struct {
         const peer = try self.allocator.create(RemotePeer);
         peer.* = try RemotePeer.init(self.allocator, connection, peer_id);
         
-        try self.peers.append(peer);
+        try self.peers.append(self.allocator, peer);
         std.debug.print("[wzl-remote-desktop] New connection: {s}\n", .{peer.peer_id});
     }
     
@@ -587,7 +586,7 @@ pub const RemoteDesktopServer = struct {
         }
         
         // Check CPU features
-        if (std.Target.current.cpu.arch == .x86_64) {
+        if (@import("builtin").target.cpu.arch == .x86_64) {
             std.debug.print("[wzl-remote-desktop] ✓ x86_64 architecture - hardware acceleration enabled\n", .{});
         }
         

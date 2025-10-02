@@ -52,15 +52,16 @@ pub const OutputInfo = struct {
     const Self = @This();
     
     pub fn init(allocator: std.mem.Allocator) Self {
+        _ = allocator; // Unused in Zig 0.16 ArrayList initialization
         return Self{
-            .modes = std.ArrayList(OutputModeInfo).init(allocator),
+            .modes = std.ArrayList(OutputModeInfo){},
         };
     }
     
     pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
         if (self.make) |make| allocator.free(make);
         if (self.model) |model| allocator.free(model);
-        self.modes.deinit();
+        self.modes.deinit(allocator);
     }
 };
 
@@ -191,7 +192,7 @@ pub const Output = struct {
                 .refresh = refresh,
             };
             
-            try self.info.modes.append(mode_info);
+            try self.info.modes.append(self.client.allocator, mode_info);
         }
     }
     

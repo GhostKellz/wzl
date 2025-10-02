@@ -141,7 +141,7 @@ pub const Message = struct {
         if (buffer.len < header.size) return error.MalformedMessage;
         if (header.size < @sizeOf(MessageHeader)) return error.MalformedMessage;
 
-        var arguments = std.ArrayList(Argument){};
+        var arguments: std.ArrayList(Argument) = .{};
         errdefer arguments.deinit(allocator);
 
         if (signature) |sig| {

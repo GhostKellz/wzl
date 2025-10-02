@@ -423,3 +423,159 @@ pub const XdgToplevel = struct {
         try self.client.connection.sendMessage(message);
     }
 };
+
+// XDG Activation support (for focus/attention requests)
+pub const xdg_activation_v1_interface = protocol.Interface{
+    .name = "xdg_activation_v1",
+    .version = 1,
+    .method_count = 2,
+    .methods = &[_]protocol.MethodSignature{
+        .{ .name = "destroy", .signature = "", .types = &[_]?*const protocol.Interface{} },
+        .{ .name = "get_activation_token", .signature = "n", .types = &[_]?*const protocol.Interface{&xdg_activation_token_v1_interface} },
+    },
+    .event_count = 0,
+    .events = &[_]protocol.MethodSignature{},
+};
+
+pub const xdg_activation_token_v1_interface = protocol.Interface{
+    .name = "xdg_activation_token_v1",
+    .version = 1,
+    .method_count = 5,
+    .methods = &[_]protocol.MethodSignature{
+        .{ .name = "destroy", .signature = "", .types = &[_]?*const protocol.Interface{} },
+        .{ .name = "set_serial", .signature = "uo", .types = &[_]?*const protocol.Interface{null, null} },
+        .{ .name = "set_app_id", .signature = "s", .types = &[_]?*const protocol.Interface{null} },
+        .{ .name = "set_surface", .signature = "o", .types = &[_]?*const protocol.Interface{&protocol.wl_surface_interface} },
+        .{ .name = "commit", .signature = "", .types = &[_]?*const protocol.Interface{} },
+    },
+    .event_count = 1,
+    .events = &[_]protocol.MethodSignature{
+        .{ .name = "done", .signature = "s", .types = &[_]?*const protocol.Interface{null} },
+    },
+};
+
+pub const ActivationToken = struct {
+    allocator: std.mem.Allocator,
+    client: *@import("client.zig").Client,
+    object_id: protocol.ObjectId,
+    listener: ?Listener = null,
+    
+    const Self = @This();
+    const Client = @import("client.zig").Client;
+
+    pub const Listener = struct {
+        context: ?*anyopaque,
+        done_fn: ?*const fn (context: ?*anyopaque, token: *ActivationToken, token_string: []const u8) void,
+    };
+
+    pub fn init(allocator: std.mem.Allocator, client: *Client, object_id: protocol.ObjectId) Self {
+        return Self{
+            .allocator = allocator,
+            .client = client,
+            .object_id = object_id,
+            .listener = null,
+        };
+    }
+
+    /// Set a listener for activation token events (backward compatibility API)
+    pub fn setListener(
+        self: *Self,
+        comptime T: type,
+        listener: struct {
+            done: ?*const fn (data: ?*T, token: *ActivationToken, token_string: []const u8) void = null,
+        },
+        data: ?*T,
+    ) void {
+        const Wrapper = struct {
+            fn doneWrapper(context: ?*anyopaque, token: *ActivationToken, token_string: []const u8) void {
+                const typed_data = @as(?*T, @ptrCast(@alignCast(context)));
+                if (listener.done) |cb| {
+                    cb(typed_data, token, token_string);
+                }
+            }
+        };
+
+        self.listener = Listener{
+            .context = @as(?*anyopaque, @ptrCast(data)),
+            .done_fn = if (listener.done != null) &Wrapper.doneWrapper else null,
+        };
+    }
+
+    pub fn setSerial(self: *Self, serial: u32, seat_id: protocol.ObjectId) !void {
+        const message = try protocol.Message.init(
+            self.allocator,
+            self.object_id,
+            1, // set_serial opcode
+            &[_]protocol.Argument{
+                .{ .uint = serial },
+                .{ .object = seat_id },
+            },
+        );
+        try self.client.connection.sendMessage(message);
+    }
+
+    pub fn setAppId(self: *Self, app_id: []const u8) !void {
+        const message = try protocol.Message.init(
+            self.allocator,
+            self.object_id,
+            2, // set_app_id opcode
+            &[_]protocol.Argument{
+                .{ .string = app_id },
+            },
+        );
+        try self.client.connection.sendMessage(message);
+    }
+
+    pub fn setSurface(self: *Self, surface_id: protocol.ObjectId) !void {
+        const message = try protocol.Message.init(
+            self.allocator,
+            self.object_id,
+            3, // set_surface opcode
+            &[_]protocol.Argument{
+                .{ .object = surface_id },
+            },
+        );
+        try self.client.connection.sendMessage(message);
+    }
+
+    pub fn commit(self: *Self) !void {
+        const message = try protocol.Message.init(
+            self.allocator,
+            self.object_id,
+            4, // commit opcode
+            &.{},
+        );
+        try self.client.connection.sendMessage(message);
+    }
+
+    pub fn handleEvent(self: *Self, message: protocol.Message) !void {
+        switch (message.header.opcode) {
+            0 => { // done event
+                if (message.arguments.len >= 1) {
+                    const token_string = switch (message.arguments[0]) {
+                        .string => |s| s,
+                        else => return error.InvalidArgument,
+                    };
+
+                    // Call listener callback if registered
+                    if (self.listener) |listener| {
+                        if (listener.done_fn) |callback| {
+                            callback(listener.context, self, token_string);
+                        }
+                    }
+                }
+            },
+            else => {},
+        }
+    }
+
+    pub fn destroy(self: *Self) !void {
+        const message = try protocol.Message.init(
+            self.allocator,
+            self.object_id,
+            0, // destroy opcode
+            &.{},
+        );
+        try self.client.connection.sendMessage(message);
+    }
+};

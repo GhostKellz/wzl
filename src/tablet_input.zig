@@ -130,6 +130,7 @@ pub const TabletToolState = struct {
 
     // Button state
     buttons_pressed: std.ArrayList(u32),
+    allocator: std.mem.Allocator,
 
     // Tool state
     is_down: bool = false,
@@ -143,12 +144,13 @@ pub const TabletToolState = struct {
             .hardware_serial = 0,
             .hardware_id = 0,
             .capabilities = .{},
-            .buttons_pressed = std.ArrayList(u32).init(allocator),
+            .buttons_pressed = std.ArrayList(u32){},
+            .allocator = allocator,
         };
     }
 
     pub fn deinit(self: *TabletToolState) void {
-        self.buttons_pressed.deinit();
+        self.buttons_pressed.deinit(self.allocator);
     }
 };
 
@@ -291,7 +293,7 @@ pub const TabletHandler = struct {
         self.tablets.deinit();
         self.tools.deinit();
         self.event_queue.deinit();
-        self.pressure_curves.deinit();
+        self.pressure_curves.deinit(self.allocator);
     }
 
     pub fn handleTabletAdded(self: *TabletHandler, message: protocol.Message) !void {
@@ -475,7 +477,7 @@ pub const TabletHandler = struct {
                     const state = @as(TabletButtonState, @enumFromInt(message.arguments[2].uint));
 
                     if (state == .pressed) {
-                        try tool.buttons_pressed.append(button);
+                        try tool.buttons_pressed.append(self.allocator, button);
                     } else {
                         for (tool.buttons_pressed.items, 0..) |b, i| {
                             if (b == button) {
@@ -549,8 +551,8 @@ test "TabletToolState button management" {
     var tool = TabletToolState.init(std.testing.allocator, 1);
     defer tool.deinit();
 
-    try tool.buttons_pressed.append(1);
-    try tool.buttons_pressed.append(2);
+    try tool.buttons_pressed.append(std.testing.allocator, 1);
+    try tool.buttons_pressed.append(std.testing.allocator, 2);
 
     try std.testing.expectEqual(@as(usize, 2), tool.buttons_pressed.items.len);
 

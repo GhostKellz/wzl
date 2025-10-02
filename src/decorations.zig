@@ -153,16 +153,68 @@ pub const ButtonState = enum {
 pub const DecorationManager = struct {
     allocator: std.mem.Allocator,
     config: DecorationConfig,
-    surfaces: std.HashMap(protocol.ObjectId, *DecorationSurface),
+    surfaces: std.HashMap(protocol.ObjectId, *DecorationSurface, std.hash_map.AutoContext(protocol.ObjectId), std.hash_map.default_max_load_percentage),
+    listener: ?Listener = null,
     
     const Self = @This();
-    
+
+    pub const Listener = struct {
+        context: ?*anyopaque,
+        mode_fn: ?*const fn (context: ?*anyopaque, manager: *DecorationManager, surface_id: protocol.ObjectId, mode: u32) void,
+    };
+
     pub fn init(allocator: std.mem.Allocator, config: DecorationConfig) !Self {
         return Self{
             .allocator = allocator,
             .config = config,
-            .surfaces = std.HashMap(protocol.ObjectId, *DecorationSurface).init(allocator),
+            .surfaces = std.HashMap(protocol.ObjectId, *DecorationSurface, std.hash_map.AutoContext(protocol.ObjectId), std.hash_map.default_max_load_percentage).init(allocator),
+            .listener = null,
         };
+    }
+
+    /// Set a listener for decoration manager events (backward compatibility API)
+    pub fn setListener(
+        self: *Self,
+        comptime T: type,
+        listener: struct {
+            mode: ?*const fn (data: ?*T, manager: *DecorationManager, surface_id: protocol.ObjectId, mode: u32) void = null,
+        },
+        data: ?*T,
+    ) void {
+        const Wrapper = struct {
+            fn modeWrapper(context: ?*anyopaque, manager: *DecorationManager, surface_id: protocol.ObjectId, mode: u32) void {
+                const typed_data = @as(?*T, @ptrCast(@alignCast(context)));
+                if (listener.mode) |cb| {
+                    cb(typed_data, manager, surface_id, mode);
+                }
+            }
+        };
+
+        self.listener = Listener{
+            .context = @as(?*anyopaque, @ptrCast(data)),
+            .mode_fn = if (listener.mode != null) &Wrapper.modeWrapper else null,
+        };
+    }
+
+    pub fn handleEvent(self: *Self, surface_id: protocol.ObjectId, opcode: u32, args: []const protocol.Argument) !void {
+        switch (opcode) {
+            0 => { // mode event
+                if (args.len >= 1) {
+                    const mode = switch (args[0]) {
+                        .uint => |v| v,
+                        else => return error.InvalidArgument,
+                    };
+
+                    // Call listener callback if registered
+                    if (self.listener) |listener| {
+                        if (listener.mode_fn) |callback| {
+                            callback(listener.context, self, surface_id, mode);
+                        }
+                    }
+                }
+            },
+            else => {},
+        }
     }
     
     pub fn deinit(self: *Self) void {

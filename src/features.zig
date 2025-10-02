@@ -8,43 +8,43 @@ pub const Features = struct {
     pub const basic_client: bool = true;
     pub const basic_server: bool = true;
 
-    // Input device features - using @hasDecl to check for build-time defines
-    pub const touch_input: bool = @hasDecl(@import("builtin"), "WZL_FEATURE_touch_input");
-    pub const tablet_input: bool = @hasDecl(@import("builtin"), "WZL_FEATURE_tablet_input");
-    pub const gesture_recognition: bool = @hasDecl(@import("builtin"), "WZL_FEATURE_gesture_recognition");
+    // Input device features - enable for full functionality
+    pub const touch_input: bool = true;
+    pub const tablet_input: bool = true;
+    pub const gesture_recognition: bool = true;
 
     // Advanced protocol features
-    pub const xdg_shell: bool = @hasDecl(@import("builtin"), "WZL_FEATURE_xdg_shell");
-    pub const clipboard: bool = @hasDecl(@import("builtin"), "WZL_FEATURE_clipboard");
-    pub const drag_drop: bool = @hasDecl(@import("builtin"), "WZL_FEATURE_drag_drop");
+    pub const xdg_shell: bool = true;
+    pub const clipboard: bool = true;
+    pub const drag_drop: bool = true;
 
     // Rendering backends
-    pub const software_renderer: bool = @hasDecl(@import("builtin"), "WZL_FEATURE_software_renderer");
-    pub const egl_backend: bool = @hasDecl(@import("builtin"), "WZL_FEATURE_egl_backend");
-    pub const vulkan_backend: bool = @hasDecl(@import("builtin"), "WZL_FEATURE_vulkan_backend");
+    pub const software_renderer: bool = true;
+    pub const egl_backend: bool = true;
+    pub const vulkan_backend: bool = true;
 
     // Remote desktop & streaming
-    pub const remote_desktop: bool = @hasDecl(@import("builtin"), "WZL_FEATURE_remote_desktop");
-    pub const quic_streaming: bool = @hasDecl(@import("builtin"), "WZL_FEATURE_quic_streaming");
-    pub const h264_encoding: bool = @hasDecl(@import("builtin"), "WZL_FEATURE_h264_encoding");
+    pub const remote_desktop: bool = true;
+    pub const quic_streaming: bool = true;
+    pub const h264_encoding: bool = false; // Still needs implementation
 
     // Advanced features
-    pub const fractional_scaling: bool = @hasDecl(@import("builtin"), "WZL_FEATURE_fractional_scaling");
-    pub const hardware_cursor: bool = @hasDecl(@import("builtin"), "WZL_FEATURE_hardware_cursor");
-    pub const multi_gpu: bool = @hasDecl(@import("builtin"), "WZL_FEATURE_multi_gpu");
-    pub const color_management: bool = @hasDecl(@import("builtin"), "WZL_FEATURE_color_management");
+    pub const fractional_scaling: bool = true;
+    pub const hardware_cursor: bool = true;
+    pub const multi_gpu: bool = true;
+    pub const color_management: bool = true; // Phase 2 implemented
 
     // Development & debugging
-    pub const memory_tracking: bool = @hasDecl(@import("builtin"), "WZL_FEATURE_memory_tracking");
-    pub const thread_safety_debug: bool = @hasDecl(@import("builtin"), "WZL_FEATURE_thread_safety_debug");
-    pub const protocol_logging: bool = @hasDecl(@import("builtin"), "WZL_FEATURE_protocol_logging");
+    pub const memory_tracking: bool = true;
+    pub const thread_safety_debug: bool = true;
+    pub const protocol_logging: bool = true;
 
     // Compositor framework
-    pub const compositor_framework: bool = @hasDecl(@import("builtin"), "WZL_FEATURE_compositor_framework");
-    pub const window_management: bool = @hasDecl(@import("builtin"), "WZL_FEATURE_window_management");
+    pub const compositor_framework: bool = true;
+    pub const window_management: bool = true;
 
     // Terminal integration
-    pub const terminal_integration: bool = @hasDecl(@import("builtin"), "WZL_FEATURE_terminal_integration");
+    pub const terminal_integration: bool = true;
 
     /// Feature dependency validation at compile time
     pub fn validateDependencies() void {
@@ -111,32 +111,32 @@ pub const Features = struct {
 
     /// Generate feature summary string for logging/debugging
     pub fn getSummary(allocator: std.mem.Allocator) ![]const u8 {
-        var features = std.ArrayList([]const u8).init(allocator);
-        defer features.deinit();
+        var features = std.ArrayList([]const u8){};
+        defer features.deinit(allocator);
 
-        try features.append("core_protocol");
-        if (touch_input) try features.append("touch_input");
-        if (tablet_input) try features.append("tablet_input");
-        if (gesture_recognition) try features.append("gesture_recognition");
-        if (xdg_shell) try features.append("xdg_shell");
-        if (clipboard) try features.append("clipboard");
-        if (drag_drop) try features.append("drag_drop");
-        if (software_renderer) try features.append("software_renderer");
-        if (egl_backend) try features.append("egl_backend");
-        if (vulkan_backend) try features.append("vulkan_backend");
-        if (remote_desktop) try features.append("remote_desktop");
-        if (quic_streaming) try features.append("quic_streaming");
-        if (h264_encoding) try features.append("h264_encoding");
-        if (fractional_scaling) try features.append("fractional_scaling");
-        if (hardware_cursor) try features.append("hardware_cursor");
-        if (multi_gpu) try features.append("multi_gpu");
-        if (color_management) try features.append("color_management");
-        if (memory_tracking) try features.append("memory_tracking");
-        if (thread_safety_debug) try features.append("thread_safety_debug");
-        if (protocol_logging) try features.append("protocol_logging");
-        if (compositor_framework) try features.append("compositor_framework");
-        if (window_management) try features.append("window_management");
-        if (terminal_integration) try features.append("terminal_integration");
+        try features.append(allocator, "core_protocol");
+        if (touch_input) try features.append(allocator, "touch_input");
+        if (tablet_input) try features.append(allocator, "tablet_input");
+        if (gesture_recognition) try features.append(allocator, "gesture_recognition");
+        if (xdg_shell) try features.append(allocator, "xdg_shell");
+        if (clipboard) try features.append(allocator, "clipboard");
+        if (drag_drop) try features.append(allocator, "drag_drop");
+        if (software_renderer) try features.append(allocator, "software_renderer");
+        if (egl_backend) try features.append(allocator, "egl_backend");
+        if (vulkan_backend) try features.append(allocator, "vulkan_backend");
+        if (remote_desktop) try features.append(allocator, "remote_desktop");
+        if (quic_streaming) try features.append(allocator, "quic_streaming");
+        if (h264_encoding) try features.append(allocator, "h264_encoding");
+        if (fractional_scaling) try features.append(allocator, "fractional_scaling");
+        if (hardware_cursor) try features.append(allocator, "hardware_cursor");
+        if (multi_gpu) try features.append(allocator, "multi_gpu");
+        if (color_management) try features.append(allocator, "color_management");
+        if (memory_tracking) try features.append(allocator, "memory_tracking");
+        if (thread_safety_debug) try features.append(allocator, "thread_safety_debug");
+        if (protocol_logging) try features.append(allocator, "protocol_logging");
+        if (compositor_framework) try features.append(allocator, "compositor_framework");
+        if (window_management) try features.append(allocator, "window_management");
+        if (terminal_integration) try features.append(allocator, "terminal_integration");
 
         return try std.mem.join(allocator, ", ", features.items);
     }

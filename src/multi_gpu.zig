@@ -307,7 +307,7 @@ pub const MultiGpuManager = struct {
             .active_assignments = std.AutoHashMap(protocol.ObjectId, Assignment).init(allocator),
             .load_balancer = LoadBalancer{
                 .strategy = .workload_aware,
-                .workload_history = std.ArrayList(LoadBalancer.WorkloadHistory).init(allocator),
+                .workload_history = std.ArrayList(LoadBalancer.WorkloadHistory){},
                 .migration_threshold = 0.15, // 15% utilization difference
             },
             .thermal_manager = ThermalManager{
@@ -329,9 +329,9 @@ pub const MultiGpuManager = struct {
 
     pub fn deinit(self: *MultiGpuManager) void {
         self.gpus.deinit();
-        self.active_assignments.deinit();
-        self.load_balancer.workload_history.deinit();
-        self.thermal_manager.temperature_limits.deinit();
+        self.active_assignments.deinit(self.allocator);
+        self.load_balancer.workload_history.deinit(self.allocator);
+        self.thermal_manager.temperature_limits.deinit(self.allocator);
     }
 
     fn discoverGpus(self: *MultiGpuManager) !void {
@@ -611,32 +611,32 @@ pub const MultiGpuManager = struct {
         switch (workload_type) {
             .gaming => {
                 if (gpu.supports_ray_tracing) {
-                    try reasons.append(try self.allocator.dupe(u8, "Hardware ray tracing support"));
+                    try reasons.append(self.allocator, try self.allocator.dupe(u8, "Hardware ray tracing support"));
                 }
                 if (gpu.gpu_type == .discrete) {
-                    try reasons.append(try self.allocator.dupe(u8, "Dedicated GPU with high performance"));
+                    try reasons.append(self.allocator, try self.allocator.dupe(u8, "Dedicated GPU with high performance"));
                 }
             },
             .compute => {
                 if (gpu.supports_compute) {
-                    try reasons.append(try self.allocator.dupe(u8, "Compute shader support"));
+                    try reasons.append(self.allocator, try self.allocator.dupe(u8, "Compute shader support"));
                 }
                 if (gpu.memory_info.total_vram > 8 * 1024 * 1024 * 1024) {
-                    try reasons.append(try self.allocator.dupe(u8, "Large VRAM for compute workloads"));
+                    try reasons.append(self.allocator, try self.allocator.dupe(u8, "Large VRAM for compute workloads"));
                 }
             },
             .video_encoding => {
                 if (gpu.vendor == .nvidia) {
-                    try reasons.append(try self.allocator.dupe(u8, "NVENC hardware encoder"));
+                    try reasons.append(self.allocator, try self.allocator.dupe(u8, "NVENC hardware encoder"));
                 }
             },
             .compositing => {
-                try reasons.append(try self.allocator.dupe(u8, "Suitable for desktop compositing"));
+                try reasons.append(self.allocator, try self.allocator.dupe(u8, "Suitable for desktop compositing"));
             },
         }
 
         if (gpu.gpu_utilization < 0.3) {
-            try reasons.append(try self.allocator.dupe(u8, "Low current utilization"));
+            try reasons.append(self.allocator, try self.allocator.dupe(u8, "Low current utilization"));
         }
 
         return reasons;
@@ -649,7 +649,7 @@ pub const MultiGpuManager = struct {
         while (iter.next()) |entry| {
             const gpu = entry.value_ptr.*;
             if (gpu.id != exclude_gpu_id and gpu.getScore(workload_type) > 200) {
-                try alternatives.append(gpu.id);
+                try alternatives.append(self.allocator, gpu.id);
             }
         }
 

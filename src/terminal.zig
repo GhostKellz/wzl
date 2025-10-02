@@ -111,7 +111,7 @@ pub const TerminalBuffer = struct {
             .rows = rows,
             .cols = cols,
             .cursor = Cursor{},
-            .scrollback = std.ArrayList([]Cell).init(allocator),
+            .scrollback = std.ArrayList([]Cell){},
             .allocator = allocator,
         };
     }
@@ -125,7 +125,7 @@ pub const TerminalBuffer = struct {
         for (self.scrollback.items) |row| {
             self.allocator.free(row);
         }
-        self.scrollback.deinit();
+        self.scrollback.deinit(self.allocator);
     }
     
     pub fn resize(self: *Self, new_rows: u16, new_cols: u16) !void {
@@ -196,7 +196,7 @@ pub const TerminalBuffer = struct {
             if (self.scrollback.items.len >= self.scrollback_limit) {
                 self.allocator.free(self.scrollback.orderedRemove(0));
             }
-            self.scrollback.append(old_row) catch {
+            self.scrollback.append(self.allocator, old_row) catch {
                 self.allocator.free(old_row);
             };
             

@@ -29,7 +29,7 @@ pub const CursorPlane = struct {
             .name = try allocator.dupe(u8, name),
             .width_max = 64,
             .height_max = 64,
-            .formats = std.ArrayList(u32).init(allocator),
+            .formats = std.ArrayList(u32){},
             .in_use = false,
             .current_surface = null,
             .supports_alpha = true,
@@ -43,11 +43,11 @@ pub const CursorPlane = struct {
 
     pub fn deinit(self: *CursorPlane) void {
         self.allocator.free(self.name);
-        self.formats.deinit();
+        self.formats.deinit(self.allocator);
     }
 
     pub fn addFormat(self: *CursorPlane, format: u32) !void {
-        try self.formats.append(format);
+        try self.formats.append(self.allocator, format);
     }
 
     pub fn supportsFormat(self: *CursorPlane, format: u32) bool {
@@ -115,8 +115,8 @@ pub const HardwareCursorManager = struct {
         while (iter.next()) |entry| {
             entry.value_ptr.deinit();
         }
-        self.active_cursors.deinit();
-        self.planes.deinit();
+        self.active_cursors.deinit(self.allocator);
+        self.planes.deinit(self.allocator);
     }
 
     fn detectHardwarePlanes(self: *HardwareCursorManager) !void {
@@ -347,7 +347,7 @@ pub const HardwareCursorManager = struct {
                     }
                 }
                 if (!found) {
-                    caps.supported_formats.append(format) catch {};
+                    caps.supported_formats.append(self.allocator, format) catch {};
                 }
             }
         }
@@ -365,7 +365,7 @@ pub const HardwareCursorManager = struct {
         supported_formats: std.ArrayList(u32),
 
         pub fn deinit(self: *CursorCapabilities) void {
-            self.supported_formats.deinit();
+            self.supported_formats.deinit(self.allocator);
         }
 
         pub fn format(
@@ -463,9 +463,9 @@ pub const CursorTheme = struct {
             for (entry.value_ptr.frames.items) |frame| {
                 self.allocator.free(frame.buffer);
             }
-            entry.value_ptr.frames.deinit();
+            entry.value_ptr.frames.deinit(self.allocator);
         }
-        self.cursors.deinit();
+        self.cursors.deinit(self.allocator);
         self.allocator.free(self.name);
     }
 
@@ -487,7 +487,7 @@ pub const CursorTheme = struct {
                 .hotspot_x = 12,
                 .hotspot_y = 12,
                 .format = 0x34325241, // ARGB8888
-                .frames = std.ArrayList(CursorImage.Frame).init(allocator),
+                .frames = std.ArrayList(CursorImage.Frame){},
             };
 
             // Create placeholder frame
@@ -495,7 +495,7 @@ pub const CursorTheme = struct {
             const buffer = try allocator.alloc(u8, buffer_size);
             @memset(buffer, 0xFF); // White cursor for now
 
-            try cursor_image.frames.append(.{
+            try cursor_image.frames.append(allocator, .{
                 .buffer = buffer,
                 .duration_ms = 0, // Static cursor
             });
@@ -521,7 +521,7 @@ test "hardware cursor plane detection" {
     try std.testing.expect(manager.planes.count() >= 1);
 
     const caps = manager.getCapabilities();
-    defer caps.supported_formats.deinit();
+    defer caps.supported_formats.deinit(std.testing.allocator);
 
     try std.testing.expect(caps.max_width >= 64);
     try std.testing.expect(caps.max_height >= 64);

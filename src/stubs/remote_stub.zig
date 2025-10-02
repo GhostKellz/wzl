@@ -3,11 +3,17 @@
 const std = @import("std");
 
 pub const RemoteServer = struct {
-    pub fn init() RemoteServer {
+    pub fn init(allocator: std.mem.Allocator, config: anytype) !RemoteServer {
+        _ = allocator;
+        _ = config;
         return .{};
     }
 
     pub fn deinit(self: *RemoteServer) void {
+        _ = self;
+    }
+
+    pub fn optimizeForArch(self: *RemoteServer) !void {
         _ = self;
     }
 };

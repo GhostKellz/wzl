@@ -65,9 +65,12 @@ pub const xdg_wm_base_interface = xdg_shell.xdg_wm_base_interface;
 pub const xdg_surface_interface = xdg_shell.xdg_surface_interface;
 pub const xdg_toplevel_interface = xdg_shell.xdg_toplevel_interface;
 pub const xdg_popup_interface = xdg_shell.xdg_popup_interface;
+pub const xdg_activation_v1_interface = xdg_shell.xdg_activation_v1_interface;
+pub const xdg_activation_token_v1_interface = xdg_shell.xdg_activation_token_v1_interface;
 pub const XdgWmBase = xdg_shell.XdgWmBase;
 pub const XdgSurface = xdg_shell.XdgSurface;
 pub const XdgToplevel = xdg_shell.XdgToplevel;
+pub const ActivationToken = xdg_shell.ActivationToken;
 
 // Input exports
 pub const wl_seat_interface = input.wl_seat_interface;
@@ -96,6 +99,8 @@ pub const CompositorFramework = compositor.CompositorFramework;
 pub const CompositorConfig = compositor.CompositorConfig;
 pub const RemoteServer = remote.RemoteServer;
 pub const RemoteClient = remote.RemoteClient;
+pub const RemoteSessionConfig = remote.RemoteSessionConfig; // Alias for compatibility
+pub const StreamingConfig = quic_streaming.StreamingConfig;
 pub const QuicServer = quic_streaming.QuicServer;
 pub const QuicStream = quic_streaming.QuicStream;
 pub const FrameMetadata = quic_streaming.FrameMetadata;
@@ -127,6 +132,25 @@ pub const GpuVendor = multi_gpu.GpuVendor;
 pub const FractionalScalingManager = fractional_scaling.FractionalScalingManager;
 pub const FractionalScale = fractional_scaling.FractionalScale;
 pub const SurfaceScale = fractional_scaling.SurfaceScale;
+
+// Color management exports (Phase 2)
+pub const color_management = if (Features.color_management) @import("color_management.zig") else @import("stubs/color_management_stub.zig");
+pub const ColorManager = color_management.ColorManager;
+pub const ColorSpace = color_management.ColorSpace;
+pub const TransferFunction = color_management.TransferFunction;
+pub const HDRMetadata = color_management.HDRMetadata;
+pub const ColorProfile = color_management.ColorProfile;
+pub const ColorTransform = color_management.ColorTransform;
+
+// Screen capture exports (Phase 2)
+pub const screen_capture = @import("screen_capture.zig");
+pub const ScreenCapture = screen_capture.ScreenCapture;
+pub const CaptureConfig = screen_capture.CaptureConfig;
+pub const CaptureMethod = screen_capture.CaptureMethod;
+pub const CaptureFrame = screen_capture.CaptureFrame;
+pub const CaptureRegion = screen_capture.CaptureRegion;
+pub const VideoEncoder = screen_capture.VideoEncoder;
+pub const VideoCodec = screen_capture.VideoCodec;
 
 // Window decoration and theming exports
 pub const decorations = @import("decorations.zig");

@@ -20,7 +20,7 @@ pub fn Registry(comptime T: type) type {
         }
 
         pub fn deinit(self: *Self) void {
-            self.objects.deinit();
+            self.objects.deinit(self.allocator);
         }
 
         pub fn add(self: *Self, object: *T) !u32 {
@@ -80,7 +80,7 @@ pub fn MessageQueue(comptime T: type) type {
         pub fn init(allocator: std.mem.Allocator) Self {
             return .{
                 .allocator = allocator,
-                .messages = std.ArrayList(T).init(allocator),
+                .messages = std.ArrayList(T){},
                 .mutex = std.Thread.Mutex{},
                 .condition = std.Thread.Condition{},
                 .closed = std.atomic.Value(bool).init(false),
@@ -88,7 +88,7 @@ pub fn MessageQueue(comptime T: type) type {
         }
 
         pub fn deinit(self: *Self) void {
-            self.messages.deinit();
+            self.messages.deinit(self.allocator);
         }
 
         pub fn push(self: *Self, message: T) !void {
@@ -97,7 +97,7 @@ pub fn MessageQueue(comptime T: type) type {
             self.mutex.lock();
             defer self.mutex.unlock();
 
-            try self.messages.append(message);
+            try self.messages.append(self.allocator, message);
             self.condition.signal();
         }
 
@@ -179,13 +179,13 @@ pub const EventDispatcher = struct {
     pub fn init(allocator: std.mem.Allocator) EventDispatcher {
         return .{
             .allocator = allocator,
-            .handlers = std.ArrayList(HandlerEntry).init(allocator),
+            .handlers = std.ArrayList(HandlerEntry){},
             .mutex = std.Thread.RwLock{},
         };
     }
 
     pub fn deinit(self: *EventDispatcher) void {
-        self.handlers.deinit();
+        self.handlers.deinit(self.allocator);
     }
 
     pub fn subscribe(self: *EventDispatcher, comptime T: type, handler: *const fn (T) void) !void {
@@ -194,7 +194,7 @@ pub const EventDispatcher = struct {
         self.mutex.lock();
         defer self.mutex.unlock();
 
-        try self.handlers.append(.{
+        try self.handlers.append(self.allocator, .{
             .handler = @ptrCast(handler),
             .type_id = type_id,
         });
@@ -332,7 +332,7 @@ pub fn ThreadSafePool(comptime T: type) type {
         pub fn init(allocator: std.mem.Allocator, max_size: usize) Self {
             return .{
                 .allocator = allocator,
-                .free_list = std.ArrayList(*T).init(allocator),
+                .free_list = std.ArrayList(*T){},
                 .mutex = std.Thread.Mutex{},
                 .factory = null,
                 .reset_fn = null,
@@ -347,7 +347,7 @@ pub fn ThreadSafePool(comptime T: type) type {
                 }
                 self.allocator.destroy(item);
             }
-            self.free_list.deinit();
+            self.free_list.deinit(self.allocator);
         }
 
         pub fn setFactory(self: *Self, factory: *const fn (std.mem.Allocator) anyerror!*T) void {
@@ -391,7 +391,7 @@ pub fn ThreadSafePool(comptime T: type) type {
                 return;
             }
 
-            self.free_list.append(item) catch {
+            self.free_list.append(self.allocator, item) catch {
                 if (@hasDecl(T, "deinit")) {
                     item.deinit();
                 }

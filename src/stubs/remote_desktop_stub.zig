@@ -12,4 +12,10 @@ pub const RemoteDesktopServer = struct {
     }
 };
 
-pub const RemoteDesktopConfig = struct {};
+pub const RemoteDesktopConfig = struct {
+    listen_address: []const u8 = "127.0.0.1",
+    listen_port: u16 = 5900,
+    enable_encryption: bool = true,
+    enable_compression: bool = true,
+    use_tcp_nodelay: bool = true,
+};

@@ -35,7 +35,7 @@ pub const TrackingAllocator = struct {
     }
 
     pub fn deinit(self: *TrackingAllocator) void {
-        self.allocations.deinit();
+        self.allocations.deinit(allocator);
     }
 
     pub fn allocator(self: *TrackingAllocator) std.mem.Allocator {
@@ -155,11 +155,11 @@ pub const TrackingAllocator = struct {
         defer self.mutex.unlock();
 
         var leaks = std.ArrayList(LeakInfo).init(leak_alloc);
-        errdefer leaks.deinit();
+        errdefer leaks.deinit(leak_alloc);
 
         var iter = self.allocations.iterator();
         while (iter.next()) |entry| {
-            try leaks.append(LeakInfo{
+            try leaks.append(leak_alloc, LeakInfo{
                 .address = entry.key_ptr.*,
                 .size = entry.value_ptr.size,
                 .alignment = entry.value_ptr.alignment,
@@ -271,7 +271,7 @@ pub fn PoolAllocator(comptime T: type) type {
             return Self{
                 .backing_allocator = allocator,
                 .free_list = null,
-                .allocated_blocks = std.ArrayList([*]T).init(allocator),
+                .allocated_blocks = std.ArrayList([*]T){},
                 .block_size = block_size,
                 .mutex = std.Thread.Mutex{},
             };
@@ -281,7 +281,7 @@ pub fn PoolAllocator(comptime T: type) type {
             for (self.allocated_blocks.items) |block| {
                 self.backing_allocator.free(block[0..self.block_size]);
             }
-            self.allocated_blocks.deinit();
+            self.allocated_blocks.deinit(self.backing_allocator);
         }
 
         pub fn alloc(self: *Self) !*T {
@@ -297,7 +297,7 @@ pub fn PoolAllocator(comptime T: type) type {
 
             // Allocate new block
             const block = try self.backing_allocator.alloc(T, self.block_size);
-            try self.allocated_blocks.append(block.ptr);
+            try self.allocated_blocks.append(self.backing_allocator, block.ptr);
 
             // Add all but first to free list
             for (block[1..]) |*item| {
@@ -434,13 +434,13 @@ test "PoolAllocator" {
     defer pool.deinit();
 
     var ptrs = std.ArrayList(*TestStruct).init(std.testing.allocator);
-    defer ptrs.deinit();
+    defer ptrs.deinit(std.testing.allocator);
 
     // Allocate items
     for (0..5) |i| {
         const item = try pool.alloc();
         item.value = @intCast(i);
-        try ptrs.append(item);
+        try ptrs.append(std.testing.allocator, item);
     }
 
     // Free some items

@@ -160,12 +160,12 @@ pub const Shm = struct {
         return Self{
             .object_id = object_id,
             .client = client,
-            .supported_formats = std.ArrayList(ShmFormat).init(client.allocator),
+            .supported_formats = std.ArrayList(ShmFormat){},
         };
     }
 
     pub fn deinit(self: *Self) void {
-        self.supported_formats.deinit();
+        self.supported_formats.deinit(self.client.allocator);
     }
 
     pub fn createPool(self: *Self, fd: std.fs.File.Handle, size: i32) !protocol.ObjectId {
@@ -192,7 +192,7 @@ pub const Shm = struct {
                         .uint => |v| @as(ShmFormat, @enumFromInt(v)),
                         else => return error.InvalidArgument,
                     };
-                    try self.supported_formats.append(format);
+                    try self.supported_formats.append(self.client.allocator, format);
                 }
             },
             else => {},

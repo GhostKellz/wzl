@@ -30,6 +30,7 @@ pub const Registry = struct {
     object: Object,
     client: *Client,
     globals: std.HashMap(u32, Global, std.hash_map.AutoContext(u32), std.hash_map.default_max_load_percentage),
+    listener: ?Listener = null,
 
     const Self = @This();
 
@@ -37,6 +38,12 @@ pub const Registry = struct {
         name: u32,
         interface: []const u8,
         version: u32,
+    };
+
+    pub const Listener = struct {
+        context: ?*anyopaque,
+        global_fn: ?*const fn (context: ?*anyopaque, registry: *Registry, name: u32, interface_name: []const u8, version: u32) void,
+        global_remove_fn: ?*const fn (context: ?*anyopaque, registry: *Registry, name: u32) void,
     };
 
     pub fn init(client: *Client, id: protocol.ObjectId) Self {
@@ -49,6 +56,40 @@ pub const Registry = struct {
             },
             .client = client,
             .globals = std.HashMap(u32, Global, std.hash_map.AutoContext(u32), std.hash_map.default_max_load_percentage).init(client.allocator),
+            .listener = null,
+        };
+    }
+
+    /// Set a listener for registry events (backward compatibility API)
+    pub fn setListener(
+        self: *Self,
+        comptime T: type,
+        listener: struct {
+            global: ?*const fn (data: ?*T, registry: *Registry, name: u32, interface_name: []const u8, version: u32) void = null,
+            global_remove: ?*const fn (data: ?*T, registry: *Registry, name: u32) void = null,
+        },
+        data: ?*T,
+    ) void {
+        const Wrapper = struct {
+            fn globalWrapper(context: ?*anyopaque, registry: *Registry, name: u32, interface_name: []const u8, version: u32) void {
+                const typed_data = @as(?*T, @ptrCast(@alignCast(context)));
+                if (listener.global) |cb| {
+                    cb(typed_data, registry, name, interface_name, version);
+                }
+            }
+
+            fn globalRemoveWrapper(context: ?*anyopaque, registry: *Registry, name: u32) void {
+                const typed_data = @as(?*T, @ptrCast(@alignCast(context)));
+                if (listener.global_remove) |cb| {
+                    cb(typed_data, registry, name);
+                }
+            }
+        };
+
+        self.listener = Listener{
+            .context = @as(?*anyopaque, @ptrCast(data)),
+            .global_fn = if (listener.global != null) &Wrapper.globalWrapper else null,
+            .global_remove_fn = if (listener.global_remove != null) &Wrapper.globalRemoveWrapper else null,
         };
     }
 
@@ -104,6 +145,13 @@ pub const Registry = struct {
                         .interface = interface_name,
                         .version = version,
                     });
+
+                    // Call listener callback if registered
+                    if (self.listener) |listener| {
+                        if (listener.global_fn) |callback| {
+                            callback(listener.context, self, name, interface_name, version);
+                        }
+                    }
                 }
             },
             1 => { // global_remove
@@ -112,6 +160,13 @@ pub const Registry = struct {
                         .uint => |v| v,
                         else => return error.InvalidArgument,
                     };
+
+                    // Call listener callback if registered
+                    if (self.listener) |listener| {
+                        if (listener.global_remove_fn) |callback| {
+                            callback(listener.context, self, name);
+                        }
+                    }
 
                     if (self.globals.fetchRemove(name)) |entry| {
                         self.client.allocator.free(entry.value.interface);

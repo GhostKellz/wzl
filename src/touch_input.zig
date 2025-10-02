@@ -81,19 +81,19 @@ pub const GestureRecognizer = struct {
         return GestureRecognizer{
             .allocator = allocator,
             .touch_points = std.AutoHashMap(i32, TouchPoint).init(allocator),
-            .gesture_callbacks = std.ArrayList(GestureCallback).init(allocator),
-            .gesture_start_points = std.ArrayList(TouchPoint).init(allocator),
+            .gesture_callbacks = std.ArrayList(GestureCallback){},
+            .gesture_start_points = std.ArrayList(TouchPoint){},
         };
     }
 
     pub fn deinit(self: *GestureRecognizer) void {
-        self.touch_points.deinit();
-        self.gesture_callbacks.deinit();
-        self.gesture_start_points.deinit();
+        self.touch_points.deinit(self.allocator);
+        self.gesture_callbacks.deinit(self.allocator);
+        self.gesture_start_points.deinit(self.allocator);
     }
 
     pub fn addCallback(self: *GestureRecognizer, gesture: GestureType, callback: *const fn (GestureInfo) void) !void {
-        try self.gesture_callbacks.append(.{
+        try self.gesture_callbacks.append(self.allocator, .{
             .gesture = gesture,
             .callback = callback,
         });
@@ -107,7 +107,7 @@ pub const GestureRecognizer = struct {
             self.gesture_start_points.clearRetainingCapacity();
         }
 
-        try self.gesture_start_points.append(point);
+        try self.gesture_start_points.append(self.allocator, point);
         try self.detectGesture();
     }
 

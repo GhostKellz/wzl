@@ -46,13 +46,14 @@ pub const SurfaceState = struct {
     const Self = @This();
 
     pub fn init(allocator: std.mem.Allocator) Self {
+        _ = allocator; // Unused in Zig 0.16 ArrayList initialization
         return Self{
-            .damage_regions = std.ArrayList(DamageRect).init(allocator),
+            .damage_regions = std.ArrayList(DamageRect){},
         };
     }
 
-    pub fn deinit(self: *Self) void {
-        self.damage_regions.deinit();
+    pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
+        self.damage_regions.deinit(allocator);
     }
 };
 
@@ -76,20 +77,20 @@ pub const View = struct {
         return Self{
             .surface_id = surface_id,
             .state = SurfaceState.init(allocator),
-            .children = std.ArrayList(*View).init(allocator),
+            .children = std.ArrayList(*View){},
             .allocator = allocator,
         };
     }
 
     pub fn deinit(self: *Self) void {
-        self.state.deinit();
+        self.state.deinit(self.allocator);
         // Don't deinit children as they're managed by the compositor
-        self.children.deinit();
+        self.children.deinit(self.allocator);
     }
 
     pub fn addChild(self: *Self, child: *View) !void {
         child.parent = self;
-        try self.children.append(child);
+        try self.children.append(self.allocator, child);
     }
 
     pub fn removeChild(self: *Self, child: *View) void {
@@ -127,7 +128,7 @@ pub const View = struct {
     }
 
     pub fn addDamage(self: *Self, x: i32, y: i32, width: i32, height: i32) !void {
-        try self.state.damage_regions.append(DamageRect{
+        try self.state.damage_regions.append(self.allocator, DamageRect{
             .x = x,
             .y = y,
             .width = width,
@@ -166,7 +167,7 @@ pub const OutputManager = struct {
 
     pub fn init(allocator: std.mem.Allocator) Self {
         return Self{
-            .outputs = std.ArrayList(OutputInfo).init(allocator),
+            .outputs = std.ArrayList(OutputInfo){},
             .allocator = allocator,
         };
     }
@@ -175,7 +176,7 @@ pub const OutputManager = struct {
         for (self.outputs.items) |*output_item| {
             output_item.deinit(self.allocator);
         }
-        self.outputs.deinit();
+        self.outputs.deinit(self.allocator);
     }
 
     pub fn addOutput(self: *Self, name: []const u8, width: i32, height: i32, refresh_rate: i32) !*OutputInfo {
@@ -193,7 +194,7 @@ pub const OutputManager = struct {
             .connected = true,
         };
 
-        try self.outputs.append(output_info);
+        try self.outputs.append(self.allocator, output_info);
         const output_ptr = &self.outputs.items[self.outputs.items.len - 1];
 
         if (self.primary_output == null) {
@@ -243,7 +244,7 @@ pub const InputManager = struct {
 
     pub fn init(allocator: std.mem.Allocator) Self {
         return Self{
-            .seats = std.ArrayList(SeatInfo).init(allocator),
+            .seats = std.ArrayList(SeatInfo){},
             .allocator = allocator,
         };
     }
@@ -252,7 +253,7 @@ pub const InputManager = struct {
         for (self.seats.items) |*seat| {
             seat.deinit(self.allocator);
         }
-        self.seats.deinit();
+        self.seats.deinit(self.allocator);
     }
 
     pub fn addSeat(self: *Self, name: []const u8, capabilities: input.SeatCapability) !*SeatInfo {
@@ -263,7 +264,7 @@ pub const InputManager = struct {
             .capabilities = capabilities,
         };
 
-        try self.seats.append(seat);
+        try self.seats.append(self.allocator, seat);
         const seat_ptr = &self.seats.items[self.seats.items.len - 1];
 
         if (self.default_seat == null) {
@@ -315,15 +316,14 @@ pub const CompositorFramework = struct {
     const Self = @This();
 
     pub fn init(allocator: std.mem.Allocator, config: CompositorConfig) !Self {
-        const server_config = .{};
-        const compositor_server = try server.Server.init(allocator, server_config);
+        const compositor_server = try server.Server.init(allocator, .{});
 
         return Self{
             .server = compositor_server,
             .config = config,
             .allocator = allocator,
             .views = std.HashMap(protocol.ObjectId, *View, std.hash_map.AutoContext(protocol.ObjectId), std.hash_map.default_max_load_percentage).init(allocator),
-            .root_views = std.ArrayList(*View).init(allocator),
+            .root_views = std.ArrayList(*View){},
             .output_manager = OutputManager.init(allocator),
             .input_manager = InputManager.init(allocator),
         };
@@ -337,7 +337,7 @@ pub const CompositorFramework = struct {
             self.allocator.destroy(entry.value_ptr.*);
         }
         self.views.deinit();
-        self.root_views.deinit();
+        self.root_views.deinit(self.allocator);
 
         // Clean up managers
         self.output_manager.deinit();
@@ -375,7 +375,7 @@ pub const CompositorFramework = struct {
         // For now, we'll simulate with a simple loop
         while (self.running) {
             // Process events, handle client connections, render frames
-            std.time.sleep(16_666_666); // ~60 FPS
+            std.Thread.sleep(16_666_666); // ~60 FPS
 
             // This would be replaced with actual event processing
             // try self.processEvents();
@@ -393,7 +393,7 @@ pub const CompositorFramework = struct {
         view.* = View.init(self.allocator, surface_id);
 
         try self.views.put(surface_id, view);
-        try self.root_views.append(view);
+        try self.root_views.append(self.allocator, view);
 
         std.debug.print("[wzl] Created view for surface {}\n", .{surface_id});
         return view;
@@ -512,18 +512,18 @@ pub const Scene = struct {
 
     pub fn init(allocator: std.mem.Allocator, output_info: output.OutputInfo) Self {
         return Self{
-            .views = std.ArrayList(*View).init(allocator),
+            .views = std.ArrayList(*View){},
             .allocator = allocator,
             .output = output_info,
         };
     }
 
     pub fn deinit(self: *Self) void {
-        self.views.deinit();
+        self.views.deinit(self.allocator);
     }
 
     pub fn addView(self: *Self, view: *View) !void {
-        try self.views.append(view);
+        try self.views.append(self.allocator, view);
     }
 
     pub fn removeView(self: *Self, view: *View) void {

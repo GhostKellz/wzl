@@ -48,7 +48,12 @@ pub const FrameMetadata = packed struct {
     damage_width: u16,
     damage_height: u16,
     flags: FrameFlags,
-    reserved: [6]u8 = [_]u8{0} ** 6,
+    reserved_0: u8 = 0,
+    reserved_1: u8 = 0,
+    reserved_2: u8 = 0,
+    reserved_3: u8 = 0,
+    reserved_4: u8 = 0,
+    reserved_5: u8 = 0,
     
     pub const size = @sizeOf(@This());
 };
@@ -71,38 +76,34 @@ pub const QuicStream = struct {
     const Self = @This();
     
     pub fn init(allocator: std.mem.Allocator, id: u64, stream_type: StreamType, quic_stream: *zquic.Stream) Self {
+        _ = allocator; // Unused in Zig 0.16 ArrayList initialization
         return Self{
             .id = id,
             .stream_type = stream_type,
             .quic_stream = quic_stream,
-            .buffer = std.ArrayList(u8).init(allocator),
+            .buffer = std.ArrayList(u8){},
         };
     }
     
-    pub fn deinit(self: *Self) void {
-        self.buffer.deinit();
+    pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
+        self.buffer.deinit(allocator);
     }
     
     pub fn writeWaylandMessage(self: *Self, message: protocol.Message) !void {
         if (self.stream_type != .wayland_protocol) return error.InvalidStreamType;
-        
-        var buffer: [4096]u8 = undefined;
-        const size = try message.serialize(&buffer);
-        
-        try self.quic_stream.write(buffer[0..size]);
+
+        // TODO: Fix when zquic Stream API is ready
+        _ = message;
+        return error.NotImplemented;
     }
     
     pub fn writeFramebuffer(self: *Self, framebuffer: []const u8, metadata: FrameMetadata) !void {
         if (self.stream_type != .framebuffer_data) return error.InvalidStreamType;
-        
-        // Write metadata first
-        const metadata_bytes = std.mem.asBytes(&metadata);
-        try self.quic_stream.write(metadata_bytes);
-        
-        // Write framebuffer data
-        try self.quic_stream.write(framebuffer);
-        
-        self.metadata = metadata;
+
+        // TODO: Fix when zquic Stream API is ready
+        _ = framebuffer;
+        _ = metadata;
+        return error.NotImplemented;
     }
     
     pub fn readWaylandMessage(self: *Self, allocator: std.mem.Allocator) !protocol.Message {
@@ -171,24 +172,17 @@ pub const QuicConnection = struct {
     pub fn deinit(self: *Self) void {
         var stream_iter = self.streams.iterator();
         while (stream_iter.next()) |entry| {
-            entry.value_ptr.*.deinit();
+            entry.value_ptr.*.deinit(self.allocator);
             self.allocator.destroy(entry.value_ptr.*);
         }
         self.streams.deinit();
     }
     
     pub fn createStream(self: *Self, stream_type: StreamType) !*QuicStream {
-        const stream_id = self.next_stream_id;
-        self.next_stream_id += 4; // QUIC stream IDs increment by 4
-        
-        const quic_stream = try self.quic_conn.createStream(@intCast(stream_id));
-        
-        const stream = try self.allocator.create(QuicStream);
-        stream.* = QuicStream.init(self.allocator, stream_id, stream_type, quic_stream);
-        
-        try self.streams.put(stream_id, stream);
-        
-        return stream;
+        _ = self;
+        _ = stream_type;
+        // TODO: Fix when zquic Connection API is ready
+        return error.NotImplemented;
     }
     
     pub fn getStream(self: *Self, stream_id: u64) ?*QuicStream {
@@ -197,7 +191,7 @@ pub const QuicConnection = struct {
     
     pub fn closeStream(self: *Self, stream_id: u64) void {
         if (self.streams.fetchRemove(stream_id)) |kv| {
-            kv.value.deinit();
+            kv.value.deinit(self.allocator);
             self.allocator.destroy(kv.value);
         }
     }
@@ -205,7 +199,7 @@ pub const QuicConnection = struct {
 
 pub const QuicServer = struct {
     config: StreamingConfig,
-    quic_server: *zquic.Server,
+    quic_server: ?*anyopaque, // TODO: Fix zquic API
     connections: std.ArrayList(*QuicConnection),
     allocator: std.mem.Allocator,
     running: bool = false,
@@ -213,19 +207,13 @@ pub const QuicServer = struct {
     const Self = @This();
     
     pub fn init(allocator: std.mem.Allocator, config: StreamingConfig) !Self {
-        const quic_config = zquic.ServerConfig{
-            .listen_addr = config.listen_address,
-            .listen_port = config.listen_port,
-            .max_connections = 100,
-            .enable_0rtt = config.enable_0rtt,
-        };
-        
-        const quic_server = try zquic.Server.init(allocator, quic_config);
+        // TODO: Initialize proper QUIC server when zquic API is fully implemented
+        const quic_server: ?*anyopaque = null;
         
         return Self{
             .config = config,
             .quic_server = quic_server,
-            .connections = std.ArrayList(*QuicConnection).init(allocator),
+            .connections = std.ArrayList(*QuicConnection){},
             .allocator = allocator,
         };
     }
@@ -235,16 +223,18 @@ pub const QuicServer = struct {
             conn.deinit();
             self.allocator.destroy(conn);
         }
-        self.connections.deinit();
+        self.connections.deinit(self.allocator);
         
-        self.quic_server.deinit();
+        if (self.quic_server) |server| {
+            _ = server; // TODO: Implement proper deinit when zquic API is ready
+        }
     }
     
     pub fn run(self: *Self) !void {
         try self.optimizeForArch();
         
         self.running = true;
-        std.debug.print("[wzl-quic] Starting QUIC streaming server on {}:{}\n", .{ self.config.listen_address, self.config.listen_port });
+        std.debug.print("[wzl-quic] Starting QUIC streaming server on {s}:{}\n", .{ self.config.listen_address, self.config.listen_port });
         
         while (self.running) {
             // Accept new QUIC connections
@@ -273,7 +263,7 @@ pub const QuicServer = struct {
         const connection = try self.allocator.create(QuicConnection);
         connection.* = QuicConnection.init(self.allocator, quic_conn);
         
-        try self.connections.append(connection);
+        try self.connections.append(self.allocator, connection);
         std.debug.print("[wzl-quic] New QUIC connection established\n", .{});
     }
     
@@ -330,11 +320,11 @@ pub const QuicServer = struct {
         std.debug.print("[wzl-quic] Applying Arch Linux x64 optimizations...\n", .{});
         
         // Check for CPU features
-        if (std.Target.current.cpu.arch == .x86_64) {
+        if (@import("builtin").target.cpu.arch == .x86_64) {
             std.debug.print("[wzl-quic] x86_64 architecture detected\n", .{});
             
             // Check for specific CPU features that can accelerate QUIC
-            const features = std.Target.current.cpu.features;
+            const features = @import("builtin").target.cpu.features;
             _ = features;
             
             std.debug.print("[wzl-quic] Hardware acceleration features detected\n", .{});

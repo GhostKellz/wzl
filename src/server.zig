@@ -351,7 +351,7 @@ pub const RegionObject = struct {
 
 pub const Server = struct {
     allocator: std.mem.Allocator,
-    socket: std.net.StreamServer,
+    socket: std.net.Server,
     clients: std.ArrayList(*ClientConnection),
     next_client_id: u32,
     runtime: ?*zsync.Runtime,
@@ -370,13 +370,12 @@ pub const Server = struct {
         std.fs.deleteFileAbsolute(socket_path) catch {};
         
         const socket_addr = try std.net.Address.initUnix(socket_path);
-        var socket = std.net.StreamServer.init(.{});
-        try socket.listen(socket_addr);
+        const socket = try socket_addr.listen(.{});
         
         return Self{
             .allocator = allocator,
             .socket = socket,
-            .clients = std.ArrayList(*ClientConnection).init(allocator),
+            .clients = std.ArrayList(*ClientConnection){},
             .next_client_id = 1,
             .runtime = null,
         };
@@ -387,7 +386,7 @@ pub const Server = struct {
             client.deinit();
             self.allocator.destroy(client);
         }
-        self.clients.deinit();
+        self.clients.deinit(self.allocator);
         self.socket.deinit();
     }
     
@@ -408,7 +407,7 @@ pub const Server = struct {
         display.* = Display.init(client);
         try client.objects.put(1, &display.object);
         
-        try self.clients.append(client);
+        try self.clients.append(self.allocator, client);
     }
     
     pub fn bindGlobal(self: *Self, client: *ClientConnection, name: u32, interface_name: []const u8, version: u32, new_id: protocol.ObjectId) !void {

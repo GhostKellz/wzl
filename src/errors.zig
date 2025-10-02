@@ -270,15 +270,16 @@ pub const ErrorAccumulator = struct {
     max_errors: usize,
 
     pub fn init(allocator: std.mem.Allocator, max_errors: usize) ErrorAccumulator {
+        _ = allocator; // Unused in Zig 0.16 ArrayList initialization
         return .{
             .mutex = std.Thread.Mutex{},
-            .errors = std.ArrayList(ErrorContext).init(allocator),
+            .errors = std.ArrayList(ErrorContext){},
             .max_errors = max_errors,
         };
     }
 
     pub fn deinit(self: *ErrorAccumulator) void {
-        self.errors.deinit();
+        self.errors.deinit(self.allocator);
     }
 
     pub fn add(self: *ErrorAccumulator, context: ErrorContext) !void {
@@ -290,7 +291,7 @@ pub const ErrorAccumulator = struct {
             _ = self.errors.orderedRemove(0);
         }
 
-        try self.errors.append(context);
+        try self.errors.append(self.allocator, context);
     }
 
     pub fn clear(self: *ErrorAccumulator) void {

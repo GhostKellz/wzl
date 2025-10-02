@@ -202,10 +202,10 @@ pub fn main() !void {
     // Handle Ctrl+C gracefully
     const original_handler = std.posix.Sigaction{
         .handler = .{ .handler = handleSignal },
-        .mask = std.posix.empty_sigset,
+        .mask = std.mem.zeroes(std.posix.sigset_t),
         .flags = 0,
     };
-    try std.posix.sigaction(std.posix.SIG.INT, &original_handler, null);
+    std.posix.sigaction(std.posix.SIG.INT, &original_handler, null);
     
     // Print system information
     printSystemInfo();
@@ -219,7 +219,7 @@ pub fn main() !void {
     compositor.printStats();
 }
 
-fn handleSignal(sig: c_int) callconv(.C) void {
+fn handleSignal(sig: c_int) callconv(@import("std").builtin.CallingConvention.c) void {
     if (sig == std.posix.SIG.INT) {
         std.debug.print("\nReceived SIGINT, shutting down gracefully...\n", .{});
         std.process.exit(0);

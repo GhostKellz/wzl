@@ -8,8 +8,9 @@ This documentation covers everything you need to know about using wzl for Waylan
 
 ### 🚀 Quick Start
 - [Getting Started](getting-started.md) - Installation and basic setup
+- [Listener API Migration](LISTENER_API_MIGRATION.md) - Backward-compatible callback API
 - [Hello World](examples/hello-world.md) - Your first wzl application
-- [Build System](build-system.md) - Building and integrating wzl
+- [Build System](build-configuration.md) - Building and integrating wzl
 
 ### 📖 Core Concepts
 - [Architecture](architecture.md) - Understanding wzl's design

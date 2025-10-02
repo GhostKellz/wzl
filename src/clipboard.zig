@@ -157,7 +157,7 @@ pub const DataSource = struct {
         return Self{
             .object_id = object_id,
             .client = client_ref,
-            .offered_types = std.ArrayList([]const u8).init(client_ref.allocator),
+            .offered_types = std.ArrayList([]const u8){},
             .clipboard_data = std.HashMap([]const u8, ClipboardData, std.hash_map.StringContext, std.hash_map.default_max_load_percentage).init(client_ref.allocator),
         };
     }
@@ -166,19 +166,19 @@ pub const DataSource = struct {
         for (self.offered_types.items) |mime_type| {
             self.client.allocator.free(mime_type);
         }
-        self.offered_types.deinit();
+        self.offered_types.deinit(self.client.allocator);
         
         var data_iter = self.clipboard_data.iterator();
         while (data_iter.next()) |entry| {
             self.client.allocator.free(entry.key_ptr.*);
             entry.value_ptr.deinit();
         }
-        self.clipboard_data.deinit();
+        self.clipboard_data.deinit(self.client.allocator);
     }
     
     pub fn offer(self: *Self, mime_type: []const u8) !void {
         const mime_copy = try self.client.allocator.dupe(u8, mime_type);
-        try self.offered_types.append(mime_copy);
+        try self.offered_types.append(self.client.allocator, mime_copy);
         
         const message = try protocol.Message.init(
             self.client.allocator,
@@ -380,7 +380,7 @@ pub const ClipboardManager = struct {
         return Self{
             .client = client_ref,
             .seat_id = seat_id,
-            .history = std.ArrayList(ClipboardData).init(client_ref.allocator),
+            .history = std.ArrayList(ClipboardData){},
         };
     }
     
@@ -388,7 +388,7 @@ pub const ClipboardManager = struct {
         for (self.history.items) |*item| {
             item.deinit();
         }
-        self.history.deinit();
+        self.history.deinit(self.client.allocator);
     }
     
     pub fn setup(self: *Self) !void {
@@ -469,7 +469,7 @@ pub const ClipboardManager = struct {
     }
     
     fn addToHistory(self: *Self, clipboard_data: ClipboardData) !void {
-        try self.history.append(clipboard_data);
+        try self.history.append(self.client.allocator, clipboard_data);
         
         // Limit history size
         while (self.history.items.len > self.max_history_size) {

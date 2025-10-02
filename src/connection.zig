@@ -37,8 +37,7 @@ pub const Connection = struct {
         var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
         const socket_path = try std.fmt.bufPrint(&path_buffer, "{s}/{s}", .{ xdg_runtime_dir, wayland_display });
 
-        const socket_addr = try net.Address.initUnix(socket_path);
-        const socket = try net.tcpConnectToAddress(socket_addr);
+        const socket = try net.connectUnixSocket(socket_path);
 
         var conn = init(allocator, socket);
         conn.runtime = runtime;
