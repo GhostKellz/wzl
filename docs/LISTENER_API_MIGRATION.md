@@ -43,13 +43,15 @@ token.setListener(*Window, onActivationTokenEvent, self);
 pub fn setListener(
     self: *Registry,
     comptime T: type,
-    listener: struct {
+    comptime listener: struct {  // Note: listener must be comptime in Zig 0.16
         global: ?*const fn (data: ?*T, registry: *Registry, name: u32, interface_name: []const u8, version: u32) void = null,
         global_remove: ?*const fn (data: ?*T, registry: *Registry, name: u32) void = null,
     },
     data: ?*T,
 ) void
 ```
+
+**Important:** The `listener` parameter must be known at compile time (comptime). This is a Zig 0.16 requirement for nested function capture.
 
 **Example:**
 ```zig
@@ -68,7 +70,7 @@ fn onGlobalRemove(ctx: ?*Context, registry: *Registry, name: u32) void {
     std.debug.print("Global {} removed\n", .{name});
 }
 
-// Register callbacks
+// Register callbacks - listener struct is comptime-known
 var context = Context{};
 var registry = try client.getRegistry();
 registry.setListener(*Context, .{
@@ -84,7 +86,7 @@ registry.setListener(*Context, .{
 pub fn setListener(
     self: *DecorationManager,
     comptime T: type,
-    listener: struct {
+    comptime listener: struct {  // Note: listener must be comptime in Zig 0.16
         mode: ?*const fn (data: ?*T, manager: *DecorationManager, surface_id: ObjectId, mode: u32) void = null,
     },
     data: ?*T,
@@ -117,7 +119,7 @@ deco_manager.setListener(*MyWindow, .{
 pub fn setListener(
     self: *ActivationToken,
     comptime T: type,
-    listener: struct {
+    comptime listener: struct {  // Note: listener must be comptime in Zig 0.16
         done: ?*const fn (data: ?*T, token: *ActivationToken, token_string: []const u8) void = null,
     },
     data: ?*T,

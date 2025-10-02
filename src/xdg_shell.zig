@@ -8,7 +8,7 @@ pub const xdg_wm_base_interface = protocol.Interface{
     .methods = &[_]protocol.MethodSignature{
         .{ .name = "destroy", .signature = "", .types = &[_]?*const protocol.Interface{} },
         .{ .name = "create_positioner", .signature = "n", .types = &[_]?*const protocol.Interface{&xdg_positioner_interface} },
-        .{ .name = "get_xdg_surface", .signature = "no", .types = &[_]?*const protocol.Interface{&xdg_surface_interface, &protocol.wl_surface_interface} },
+        .{ .name = "get_xdg_surface", .signature = "no", .types = &[_]?*const protocol.Interface{ &xdg_surface_interface, &protocol.wl_surface_interface } },
         .{ .name = "pong", .signature = "u", .types = &[_]?*const protocol.Interface{null} },
     },
     .event_count = 1,
@@ -23,14 +23,14 @@ pub const xdg_positioner_interface = protocol.Interface{
     .method_count = 11,
     .methods = &[_]protocol.MethodSignature{
         .{ .name = "destroy", .signature = "", .types = &[_]?*const protocol.Interface{} },
-        .{ .name = "set_size", .signature = "ii", .types = &[_]?*const protocol.Interface{null, null} },
-        .{ .name = "set_anchor_rect", .signature = "iiii", .types = &[_]?*const protocol.Interface{null, null, null, null} },
+        .{ .name = "set_size", .signature = "ii", .types = &[_]?*const protocol.Interface{ null, null } },
+        .{ .name = "set_anchor_rect", .signature = "iiii", .types = &[_]?*const protocol.Interface{ null, null, null, null } },
         .{ .name = "set_anchor", .signature = "u", .types = &[_]?*const protocol.Interface{null} },
         .{ .name = "set_gravity", .signature = "u", .types = &[_]?*const protocol.Interface{null} },
         .{ .name = "set_constraint_adjustment", .signature = "u", .types = &[_]?*const protocol.Interface{null} },
-        .{ .name = "set_offset", .signature = "ii", .types = &[_]?*const protocol.Interface{null, null} },
+        .{ .name = "set_offset", .signature = "ii", .types = &[_]?*const protocol.Interface{ null, null } },
         .{ .name = "set_reactive", .signature = "3", .types = &[_]?*const protocol.Interface{} },
-        .{ .name = "set_parent_size", .signature = "3ii", .types = &[_]?*const protocol.Interface{null, null} },
+        .{ .name = "set_parent_size", .signature = "3ii", .types = &[_]?*const protocol.Interface{ null, null } },
         .{ .name = "set_parent_configure", .signature = "3u", .types = &[_]?*const protocol.Interface{null} },
     },
     .event_count = 0,
@@ -44,8 +44,8 @@ pub const xdg_surface_interface = protocol.Interface{
     .methods = &[_]protocol.MethodSignature{
         .{ .name = "destroy", .signature = "", .types = &[_]?*const protocol.Interface{} },
         .{ .name = "get_toplevel", .signature = "n", .types = &[_]?*const protocol.Interface{&xdg_toplevel_interface} },
-        .{ .name = "get_popup", .signature = "n?o", .types = &[_]?*const protocol.Interface{&xdg_popup_interface, &xdg_surface_interface, &xdg_positioner_interface} },
-        .{ .name = "set_window_geometry", .signature = "iiii", .types = &[_]?*const protocol.Interface{null, null, null, null} },
+        .{ .name = "get_popup", .signature = "n?o", .types = &[_]?*const protocol.Interface{ &xdg_popup_interface, &xdg_surface_interface, &xdg_positioner_interface } },
+        .{ .name = "set_window_geometry", .signature = "iiii", .types = &[_]?*const protocol.Interface{ null, null, null, null } },
         .{ .name = "ack_configure", .signature = "u", .types = &[_]?*const protocol.Interface{null} },
     },
     .event_count = 1,
@@ -63,11 +63,11 @@ pub const xdg_toplevel_interface = protocol.Interface{
         .{ .name = "set_parent", .signature = "?o", .types = &[_]?*const protocol.Interface{&xdg_toplevel_interface} },
         .{ .name = "set_title", .signature = "s", .types = &[_]?*const protocol.Interface{null} },
         .{ .name = "set_app_id", .signature = "s", .types = &[_]?*const protocol.Interface{null} },
-        .{ .name = "show_window_menu", .signature = "ouu", .types = &[_]?*const protocol.Interface{null, null, null} },
-        .{ .name = "move", .signature = "ou", .types = &[_]?*const protocol.Interface{null, null} },
-        .{ .name = "resize", .signature = "ouu", .types = &[_]?*const protocol.Interface{null, null, null} },
-        .{ .name = "set_max_size", .signature = "ii", .types = &[_]?*const protocol.Interface{null, null} },
-        .{ .name = "set_min_size", .signature = "ii", .types = &[_]?*const protocol.Interface{null, null} },
+        .{ .name = "show_window_menu", .signature = "ouu", .types = &[_]?*const protocol.Interface{ null, null, null } },
+        .{ .name = "move", .signature = "ou", .types = &[_]?*const protocol.Interface{ null, null } },
+        .{ .name = "resize", .signature = "ouu", .types = &[_]?*const protocol.Interface{ null, null, null } },
+        .{ .name = "set_max_size", .signature = "ii", .types = &[_]?*const protocol.Interface{ null, null } },
+        .{ .name = "set_min_size", .signature = "ii", .types = &[_]?*const protocol.Interface{ null, null } },
         .{ .name = "set_maximized", .signature = "", .types = &[_]?*const protocol.Interface{} },
         .{ .name = "unset_maximized", .signature = "", .types = &[_]?*const protocol.Interface{} },
         .{ .name = "set_fullscreen", .signature = "?o", .types = &[_]?*const protocol.Interface{&protocol.wl_output_interface} },
@@ -76,7 +76,7 @@ pub const xdg_toplevel_interface = protocol.Interface{
     },
     .event_count = 2,
     .events = &[_]protocol.MethodSignature{
-        .{ .name = "configure", .signature = "iia", .types = &[_]?*const protocol.Interface{null, null, null} },
+        .{ .name = "configure", .signature = "iia", .types = &[_]?*const protocol.Interface{ null, null, null } },
         .{ .name = "close", .signature = "", .types = &[_]?*const protocol.Interface{} },
     },
 };
@@ -87,12 +87,12 @@ pub const xdg_popup_interface = protocol.Interface{
     .method_count = 3,
     .methods = &[_]protocol.MethodSignature{
         .{ .name = "destroy", .signature = "", .types = &[_]?*const protocol.Interface{} },
-        .{ .name = "grab", .signature = "ou", .types = &[_]?*const protocol.Interface{null, null} },
-        .{ .name = "reposition", .signature = "3ou", .types = &[_]?*const protocol.Interface{&xdg_positioner_interface, null} },
+        .{ .name = "grab", .signature = "ou", .types = &[_]?*const protocol.Interface{ null, null } },
+        .{ .name = "reposition", .signature = "3ou", .types = &[_]?*const protocol.Interface{ &xdg_positioner_interface, null } },
     },
     .event_count = 3,
     .events = &[_]protocol.MethodSignature{
-        .{ .name = "configure", .signature = "iiii", .types = &[_]?*const protocol.Interface{null, null, null, null} },
+        .{ .name = "configure", .signature = "iiii", .types = &[_]?*const protocol.Interface{ null, null, null, null } },
         .{ .name = "popup_done", .signature = "", .types = &[_]?*const protocol.Interface{} },
         .{ .name = "repositioned", .signature = "3u", .types = &[_]?*const protocol.Interface{null} },
     },
@@ -155,11 +155,11 @@ pub const XdgPositionerConstraintAdjustment = packed struct {
     resize_x: bool = false,
     resize_y: bool = false,
     _padding: u26 = 0,
-    
+
     pub fn toU32(self: XdgPositionerConstraintAdjustment) u32 {
         return @bitCast(self);
     }
-    
+
     pub fn fromU32(value: u32) XdgPositionerConstraintAdjustment {
         return @bitCast(value);
     }
@@ -169,16 +169,16 @@ pub const XdgPositionerConstraintAdjustment = packed struct {
 pub const XdgWmBase = struct {
     object_id: protocol.ObjectId,
     client: *@import("client.zig").Client,
-    
+
     const Self = @This();
-    
+
     pub fn init(client: *@import("client.zig").Client, object_id: protocol.ObjectId) Self {
         return Self{
             .object_id = object_id,
             .client = client,
         };
     }
-    
+
     pub fn destroy(self: *Self) !void {
         const message = try protocol.Message.init(
             self.client.allocator,
@@ -188,7 +188,7 @@ pub const XdgWmBase = struct {
         );
         try self.client.connection.sendMessage(message);
     }
-    
+
     pub fn createPositioner(self: *Self) !protocol.ObjectId {
         const positioner_id = self.client.nextId();
         const message = try protocol.Message.init(
@@ -202,7 +202,7 @@ pub const XdgWmBase = struct {
         try self.client.connection.sendMessage(message);
         return positioner_id;
     }
-    
+
     pub fn getXdgSurface(self: *Self, surface_id: protocol.ObjectId) !protocol.ObjectId {
         const xdg_surface_id = self.client.nextId();
         const message = try protocol.Message.init(
@@ -217,7 +217,7 @@ pub const XdgWmBase = struct {
         try self.client.connection.sendMessage(message);
         return xdg_surface_id;
     }
-    
+
     pub fn pong(self: *Self, serial: u32) !void {
         const message = try protocol.Message.init(
             self.client.allocator,
@@ -234,16 +234,16 @@ pub const XdgWmBase = struct {
 pub const XdgSurface = struct {
     object_id: protocol.ObjectId,
     client: *@import("client.zig").Client,
-    
+
     const Self = @This();
-    
+
     pub fn init(client: *@import("client.zig").Client, object_id: protocol.ObjectId) Self {
         return Self{
             .object_id = object_id,
             .client = client,
         };
     }
-    
+
     pub fn destroy(self: *Self) !void {
         const message = try protocol.Message.init(
             self.client.allocator,
@@ -253,7 +253,7 @@ pub const XdgSurface = struct {
         );
         try self.client.connection.sendMessage(message);
     }
-    
+
     pub fn getToplevel(self: *Self) !protocol.ObjectId {
         const toplevel_id = self.client.nextId();
         const message = try protocol.Message.init(
@@ -267,7 +267,7 @@ pub const XdgSurface = struct {
         try self.client.connection.sendMessage(message);
         return toplevel_id;
     }
-    
+
     pub fn getPopup(self: *Self, parent_id: ?protocol.ObjectId, positioner_id: protocol.ObjectId) !protocol.ObjectId {
         const popup_id = self.client.nextId();
         const message = try protocol.Message.init(
@@ -283,7 +283,7 @@ pub const XdgSurface = struct {
         try self.client.connection.sendMessage(message);
         return popup_id;
     }
-    
+
     pub fn setWindowGeometry(self: *Self, x: i32, y: i32, width: i32, height: i32) !void {
         const message = try protocol.Message.init(
             self.client.allocator,
@@ -298,7 +298,7 @@ pub const XdgSurface = struct {
         );
         try self.client.connection.sendMessage(message);
     }
-    
+
     pub fn ackConfigure(self: *Self, serial: u32) !void {
         const message = try protocol.Message.init(
             self.client.allocator,
@@ -315,16 +315,16 @@ pub const XdgSurface = struct {
 pub const XdgToplevel = struct {
     object_id: protocol.ObjectId,
     client: *@import("client.zig").Client,
-    
+
     const Self = @This();
-    
+
     pub fn init(client: *@import("client.zig").Client, object_id: protocol.ObjectId) Self {
         return Self{
             .object_id = object_id,
             .client = client,
         };
     }
-    
+
     pub fn destroy(self: *Self) !void {
         const message = try protocol.Message.init(
             self.client.allocator,
@@ -334,7 +334,7 @@ pub const XdgToplevel = struct {
         );
         try self.client.connection.sendMessage(message);
     }
-    
+
     pub fn setParent(self: *Self, parent_id: ?protocol.ObjectId) !void {
         const message = try protocol.Message.init(
             self.client.allocator,
@@ -346,7 +346,7 @@ pub const XdgToplevel = struct {
         );
         try self.client.connection.sendMessage(message);
     }
-    
+
     pub fn setTitle(self: *Self, title: []const u8) !void {
         const message = try protocol.Message.init(
             self.client.allocator,
@@ -358,7 +358,7 @@ pub const XdgToplevel = struct {
         );
         try self.client.connection.sendMessage(message);
     }
-    
+
     pub fn setAppId(self: *Self, app_id: []const u8) !void {
         const message = try protocol.Message.init(
             self.client.allocator,
@@ -370,7 +370,7 @@ pub const XdgToplevel = struct {
         );
         try self.client.connection.sendMessage(message);
     }
-    
+
     pub fn setMaximized(self: *Self) !void {
         const message = try protocol.Message.init(
             self.client.allocator,
@@ -380,7 +380,7 @@ pub const XdgToplevel = struct {
         );
         try self.client.connection.sendMessage(message);
     }
-    
+
     pub fn unsetMaximized(self: *Self) !void {
         const message = try protocol.Message.init(
             self.client.allocator,
@@ -390,7 +390,7 @@ pub const XdgToplevel = struct {
         );
         try self.client.connection.sendMessage(message);
     }
-    
+
     pub fn setFullscreen(self: *Self, output_id: ?protocol.ObjectId) !void {
         const message = try protocol.Message.init(
             self.client.allocator,
@@ -402,7 +402,7 @@ pub const XdgToplevel = struct {
         );
         try self.client.connection.sendMessage(message);
     }
-    
+
     pub fn unsetFullscreen(self: *Self) !void {
         const message = try protocol.Message.init(
             self.client.allocator,
@@ -412,7 +412,7 @@ pub const XdgToplevel = struct {
         );
         try self.client.connection.sendMessage(message);
     }
-    
+
     pub fn setMinimized(self: *Self) !void {
         const message = try protocol.Message.init(
             self.client.allocator,
@@ -443,7 +443,7 @@ pub const xdg_activation_token_v1_interface = protocol.Interface{
     .method_count = 5,
     .methods = &[_]protocol.MethodSignature{
         .{ .name = "destroy", .signature = "", .types = &[_]?*const protocol.Interface{} },
-        .{ .name = "set_serial", .signature = "uo", .types = &[_]?*const protocol.Interface{null, null} },
+        .{ .name = "set_serial", .signature = "uo", .types = &[_]?*const protocol.Interface{ null, null } },
         .{ .name = "set_app_id", .signature = "s", .types = &[_]?*const protocol.Interface{null} },
         .{ .name = "set_surface", .signature = "o", .types = &[_]?*const protocol.Interface{&protocol.wl_surface_interface} },
         .{ .name = "commit", .signature = "", .types = &[_]?*const protocol.Interface{} },
@@ -459,7 +459,7 @@ pub const ActivationToken = struct {
     client: *@import("client.zig").Client,
     object_id: protocol.ObjectId,
     listener: ?Listener = null,
-    
+
     const Self = @This();
     const Client = @import("client.zig").Client;
 
@@ -481,7 +481,7 @@ pub const ActivationToken = struct {
     pub fn setListener(
         self: *Self,
         comptime T: type,
-        listener: struct {
+        comptime listener: struct {
             done: ?*const fn (data: ?*T, token: *ActivationToken, token_string: []const u8) void = null,
         },
         data: ?*T,

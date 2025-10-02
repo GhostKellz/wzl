@@ -64,7 +64,7 @@ pub const Registry = struct {
     pub fn setListener(
         self: *Self,
         comptime T: type,
-        listener: struct {
+        comptime listener: struct {
             global: ?*const fn (data: ?*T, registry: *Registry, name: u32, interface_name: []const u8, version: u32) void = null,
             global_remove: ?*const fn (data: ?*T, registry: *Registry, name: u32) void = null,
         },

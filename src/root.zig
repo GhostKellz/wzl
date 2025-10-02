@@ -82,7 +82,7 @@ pub const Pointer = input.Pointer;
 pub const Keyboard = input.Keyboard;
 pub const Touch = input.Touch;
 
-// Output exports  
+// Output exports
 pub const Output = output.Output;
 pub const OutputInfo = output.OutputInfo;
 pub const OutputTransform = output.OutputTransform;
@@ -176,7 +176,7 @@ pub fn bufferedPrint() !void {
 
 test "basic protocol functionality" {
     const allocator = std.testing.allocator;
-    
+
     // Test message creation and serialization
     const message = try protocol.Message.init(
         allocator,
@@ -186,7 +186,7 @@ test "basic protocol functionality" {
             .{ .uint = 42 },
         },
     );
-    
+
     var msg_buffer: [64]u8 = undefined;
     const size = try message.serialize(&msg_buffer);
     try std.testing.expect(size > 0);
@@ -194,11 +194,11 @@ test "basic protocol functionality" {
 
 test "client initialization" {
     // This test would require a running Wayland compositor
-    // For now, just test that the client can be created without connecting    
+    // For now, just test that the client can be created without connecting
     // Test that Client struct can be initialized (without actual connection)
     const client_config = .{};
     _ = client_config;
-    
+
     // We can't actually test connection without a running compositor
     // but we can test the struct definitions compile correctly
     try std.testing.expect(@TypeOf(Client) == type);

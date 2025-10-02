@@ -1,10 +1,14 @@
 # wzl Listener API Quick Reference
 
+## Important Note for Zig 0.16
+
+⚠️ The `listener` parameter must be **comptime-known** in Zig 0.16. This means you must pass a literal struct with function pointers, not a runtime-computed value.
+
 ## Registry Events
 
 ```zig
 var registry = try client.getRegistry();
-registry.setListener(*MyContext, .{
+registry.setListener(*MyContext, .{  // ✅ Literal struct is comptime
     .global = onGlobal,
     .global_remove = onRemove,
 }, &my_context);
