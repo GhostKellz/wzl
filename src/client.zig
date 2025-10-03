@@ -22,7 +22,7 @@ pub const Object = struct {
             try self.client.connection.sendMessage(message);
         }
 
-        self.client.objects.remove(self.id);
+        _ = self.client.objects.remove(self.id);
     }
 };
 
