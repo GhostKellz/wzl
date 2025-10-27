@@ -7,8 +7,9 @@ pub const ClientConnection = struct {
     connection: connection.Connection,
     id: u32,
     objects: std.HashMap(protocol.ObjectId, *ServerObject, std.hash_map.AutoContext(protocol.ObjectId), std.hash_map.default_max_load_percentage),
+    objects_mutex: std.Thread.Mutex,
     server: *Server,
-    
+
     const Self = @This();
     
     pub fn init(allocator: std.mem.Allocator, server: *Server, client_socket: std.net.Stream, client_id: u32) Self {
@@ -16,6 +17,7 @@ pub const ClientConnection = struct {
             .connection = connection.Connection.init(allocator, client_socket),
             .id = client_id,
             .objects = std.HashMap(protocol.ObjectId, *ServerObject, std.hash_map.AutoContext(protocol.ObjectId), std.hash_map.default_max_load_percentage).init(allocator),
+            .objects_mutex = .{},
             .server = server,
         };
     }
@@ -26,8 +28,13 @@ pub const ClientConnection = struct {
     }
     
     pub fn handleMessage(self: *Self, message: protocol.Message) !void {
-        if (self.objects.get(message.header.object_id)) |object| {
-            try object.handleRequest(message);
+        // Thread-safe object lookup
+        self.objects_mutex.lock();
+        const object = self.objects.get(message.header.object_id);
+        self.objects_mutex.unlock();
+
+        if (object) |obj| {
+            try obj.handleRequest(message);
         }
     }
     
@@ -107,9 +114,12 @@ pub const Display = struct {
             
             const registry = try self.object.client.connection.allocator.create(Registry);
             registry.* = Registry.init(self.object.client, registry_id);
-            
+
+            // Thread-safe object insertion
+            self.object.client.objects_mutex.lock();
+            defer self.object.client.objects_mutex.unlock();
             try self.object.client.objects.put(registry_id, &registry.object);
-            
+
             // Send global events for all registered globals
             try registry.sendGlobals();
         }
@@ -212,9 +222,12 @@ pub const CompositorObject = struct {
             
             const surface = try self.object.client.connection.allocator.create(SurfaceObject);
             surface.* = SurfaceObject.init(self.object.client, surface_id);
-            
+
+            // Thread-safe object insertion
+            self.object.client.objects_mutex.lock();
+            defer self.object.client.objects_mutex.unlock();
             try self.object.client.objects.put(surface_id, &surface.object);
-            
+
             // Notify server about new surface
             try self.object.client.server.onSurfaceCreated(surface);
         }
@@ -229,7 +242,10 @@ pub const CompositorObject = struct {
             
             const region = try self.object.client.connection.allocator.create(RegionObject);
             region.* = RegionObject.init(self.object.client, region_id);
-            
+
+            // Thread-safe object insertion
+            self.object.client.objects_mutex.lock();
+            defer self.object.client.objects_mutex.unlock();
             try self.object.client.objects.put(region_id, &region.object);
         }
     }
@@ -266,9 +282,12 @@ pub const SurfaceObject = struct {
     
     fn handleDestroy(self: *Self, message: protocol.Message) !void {
         _ = message;
-        // Remove from client objects
+
+        // Thread-safe object removal
+        self.object.client.objects_mutex.lock();
+        defer self.object.client.objects_mutex.unlock();
         _ = self.object.client.objects.remove(self.object.id);
-        
+
         // Notify server
         try self.object.client.server.onSurfaceDestroyed(self);
     }
@@ -333,6 +352,10 @@ pub const RegionObject = struct {
     
     fn handleDestroy(self: *Self, message: protocol.Message) !void {
         _ = message;
+
+        // Thread-safe object removal
+        self.object.client.objects_mutex.lock();
+        defer self.object.client.objects_mutex.unlock();
         _ = self.object.client.objects.remove(self.object.id);
     }
     
@@ -353,10 +376,15 @@ pub const Server = struct {
     allocator: std.mem.Allocator,
     socket: std.net.Server,
     clients: std.ArrayList(*ClientConnection),
+    clients_mutex: std.Thread.Mutex,
     next_client_id: u32,
+    next_id_mutex: std.Thread.Mutex,
     runtime: ?*zsync.Runtime,
-    
+
     const Self = @This();
+
+    /// Lock ordering: next_id_mutex -> clients_mutex -> client.objects_mutex
+    /// Always acquire locks in this order to prevent deadlocks.
     
     pub fn init(allocator: std.mem.Allocator, config: struct {}) !Self {
         _ = config;
@@ -376,7 +404,9 @@ pub const Server = struct {
             .allocator = allocator,
             .socket = socket,
             .clients = std.ArrayList(*ClientConnection){},
+            .clients_mutex = .{},
             .next_client_id = 1,
+            .next_id_mutex = .{},
             .runtime = null,
         };
     }
@@ -398,15 +428,27 @@ pub const Server = struct {
     }
     
     fn addClient(self: *Self, client_socket: std.net.Stream) !void {
-        const client = try self.allocator.create(ClientConnection);
-        client.* = ClientConnection.init(self.allocator, self, client_socket, self.next_client_id);
+        // Thread-safe client ID generation
+        self.next_id_mutex.lock();
+        const client_id = self.next_client_id;
         self.next_client_id += 1;
-        
+        self.next_id_mutex.unlock();
+
+        const client = try self.allocator.create(ClientConnection);
+        client.* = ClientConnection.init(self.allocator, self, client_socket, client_id);
+
         // Add display object
         const display = try self.allocator.create(Display);
         display.* = Display.init(client);
+
+        // Thread-safe object insertion
+        client.objects_mutex.lock();
+        defer client.objects_mutex.unlock();
         try client.objects.put(1, &display.object);
-        
+
+        // Thread-safe client list insertion
+        self.clients_mutex.lock();
+        defer self.clients_mutex.unlock();
         try self.clients.append(self.allocator, client);
     }
     
@@ -417,6 +459,10 @@ pub const Server = struct {
             if (name == 1) {
                 const compositor = try self.allocator.create(CompositorObject);
                 compositor.* = CompositorObject.init(client, new_id);
+
+                // Thread-safe object insertion
+                client.objects_mutex.lock();
+                defer client.objects_mutex.unlock();
                 try client.objects.put(new_id, &compositor.object);
             }
         } else if (std.mem.eql(u8, interface_name, "wl_shm")) {

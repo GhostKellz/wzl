@@ -22,6 +22,9 @@ pub const Object = struct {
             try self.client.connection.sendMessage(message);
         }
 
+        // Thread-safe object removal
+        self.client.objects_mutex.lock();
+        defer self.client.objects_mutex.unlock();
         _ = self.client.objects.remove(self.id);
     }
 };
@@ -30,6 +33,7 @@ pub const Registry = struct {
     object: Object,
     client: *Client,
     globals: std.HashMap(u32, Global, std.hash_map.AutoContext(u32), std.hash_map.default_max_load_percentage),
+    globals_mutex: std.Thread.Mutex,
     listener: ?Listener = null,
 
     const Self = @This();
@@ -56,6 +60,7 @@ pub const Registry = struct {
             },
             .client = client,
             .globals = std.HashMap(u32, Global, std.hash_map.AutoContext(u32), std.hash_map.default_max_load_percentage).init(client.allocator),
+            .globals_mutex = .{},
             .listener = null,
         };
     }
@@ -140,18 +145,27 @@ pub const Registry = struct {
                         else => return error.InvalidArgument,
                     };
 
+                    // Thread-safe globals insertion
+                    self.globals_mutex.lock();
+                    defer self.globals_mutex.unlock();
+
                     try self.globals.put(name, Global{
                         .name = name,
                         .interface = interface_name,
                         .version = version,
                     });
 
-                    // Call listener callback if registered
-                    if (self.listener) |listener| {
+                    // Call listener callback if registered (outside lock to avoid deadlock)
+                    const listener_copy = self.listener;
+                    self.globals_mutex.unlock();
+
+                    if (listener_copy) |listener| {
                         if (listener.global_fn) |callback| {
                             callback(listener.context, self, name, interface_name, version);
                         }
                     }
+
+                    self.globals_mutex.lock(); // Re-acquire for defer
                 }
             },
             1 => { // global_remove
@@ -161,12 +175,17 @@ pub const Registry = struct {
                         else => return error.InvalidArgument,
                     };
 
-                    // Call listener callback if registered
-                    if (self.listener) |listener| {
+                    // Call listener callback first (outside lock)
+                    const listener_copy = self.listener;
+                    if (listener_copy) |listener| {
                         if (listener.global_remove_fn) |callback| {
                             callback(listener.context, self, name);
                         }
                     }
+
+                    // Thread-safe globals removal
+                    self.globals_mutex.lock();
+                    defer self.globals_mutex.unlock();
 
                     if (self.globals.fetchRemove(name)) |entry| {
                         self.client.allocator.free(entry.value.interface);
@@ -277,7 +296,12 @@ pub const Compositor = struct {
         try self.object.client.connection.sendMessage(message);
 
         const surface = Surface.init(self.object.client, surface_id);
+
+        // Thread-safe object insertion
+        self.object.client.objects_mutex.lock();
+        defer self.object.client.objects_mutex.unlock();
         try self.object.client.objects.put(surface_id, .{ .surface = surface });
+
         return surface;
     }
 };
@@ -294,10 +318,15 @@ pub const Client = struct {
     allocator: std.mem.Allocator,
     display_id: protocol.ObjectId,
     next_object_id: protocol.ObjectId,
+    next_id_mutex: std.Thread.Mutex,
     objects: std.HashMap(protocol.ObjectId, ObjectType, std.hash_map.AutoContext(protocol.ObjectId), std.hash_map.default_max_load_percentage),
+    objects_mutex: std.Thread.Mutex,
     runtime: ?*zsync.Runtime,
 
     const Self = @This();
+
+    /// Lock ordering: next_id_mutex -> objects_mutex -> registry.globals_mutex
+    /// Always acquire locks in this order to prevent deadlocks.
 
     pub fn init(allocator: std.mem.Allocator, config: struct { runtime: ?*zsync.Runtime = null }) !Self {
         const conn = try connection.Connection.connectToWaylandSocket(allocator, config.runtime);
@@ -307,7 +336,9 @@ pub const Client = struct {
             .allocator = allocator,
             .display_id = 1,
             .next_object_id = 2,
+            .next_id_mutex = .{},
             .objects = std.HashMap(protocol.ObjectId, ObjectType, std.hash_map.AutoContext(protocol.ObjectId), std.hash_map.default_max_load_percentage).init(allocator),
+            .objects_mutex = .{},
             .runtime = config.runtime,
         };
     }
@@ -330,6 +361,9 @@ pub const Client = struct {
     }
 
     pub fn nextId(self: *Self) protocol.ObjectId {
+        self.next_id_mutex.lock();
+        defer self.next_id_mutex.unlock();
+
         const id = self.next_object_id;
         self.next_object_id += 1;
         return id;
@@ -350,6 +384,10 @@ pub const Client = struct {
         try self.connection.sendMessage(message);
 
         const registry = Registry.init(self, registry_id);
+
+        // Thread-safe object insertion
+        self.objects_mutex.lock();
+        defer self.objects_mutex.unlock();
         try self.objects.put(registry_id, .{ .registry = registry });
 
         return registry;
@@ -386,6 +424,17 @@ pub const Client = struct {
     }
 
     pub fn handleMessage(self: *Self, message: protocol.Message) !void {
+        // Thread-safe object lookup
+        self.objects_mutex.lock();
+        const object_exists = self.objects.contains(message.header.object_id);
+        self.objects_mutex.unlock();
+
+        if (!object_exists) return;
+
+        // Get mutable pointer under lock
+        self.objects_mutex.lock();
+        defer self.objects_mutex.unlock();
+
         if (self.objects.getPtr(message.header.object_id)) |object_wrapper| {
             switch (object_wrapper.*) {
                 .registry => |*registry| try registry.handleEvent(message),
@@ -432,7 +481,9 @@ test "Registry operations" {
         .allocator = allocator,
         .display_id = 1,
         .next_object_id = 2,
+        .next_id_mutex = .{},
         .objects = std.HashMap(protocol.ObjectId, ObjectType, std.hash_map.AutoContext(protocol.ObjectId), std.hash_map.default_max_load_percentage).init(allocator),
+        .objects_mutex = .{},
         .runtime = null,
     };
     defer client.objects.deinit();
